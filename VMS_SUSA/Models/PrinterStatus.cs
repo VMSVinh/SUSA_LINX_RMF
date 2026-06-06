@@ -11,6 +11,8 @@ public class PrinterStatus : ViewModelBase
     private int _bufferCount;
     private string _lastSentSerial = string.Empty;
     private string _lastPrintedSerial = string.Empty;
+    private string _lastReceivedRawData = string.Empty;
+    private string _receivedRawDataLog = string.Empty;
     private string _lastError = string.Empty;
     private DateTime _lastUpdatedAt = DateTime.Now;
 
@@ -54,6 +56,18 @@ public class PrinterStatus : ViewModelBase
     {
         get => _lastPrintedSerial;
         set => SetProperty(ref _lastPrintedSerial, value);
+    }
+
+    public string LastReceivedRawData
+    {
+        get => _lastReceivedRawData;
+        set => SetProperty(ref _lastReceivedRawData, value);
+    }
+
+    public string ReceivedRawDataLog
+    {
+        get => _receivedRawDataLog;
+        set => SetProperty(ref _receivedRawDataLog, value);
     }
 
     public string LastError

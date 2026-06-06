@@ -134,6 +134,7 @@
                                             Margin="6,0,0,0" Height="40" />
                                 </Grid>
                                 <Button Content="Gửi Buffer" Command="{Binding SendBufferCommand}" Style="{StaticResource SuccessButtonStyle}" Height="40" />
+                                <Button Content="Test Remote Field" Command="{Binding TestRemoteFieldDataCommand}" Style="{StaticResource NeutralButtonStyle}" Height="40" Margin="0,6,0,0" />
                             </StackPanel>
 
                             <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="10,0,0,0">
@@ -142,10 +143,12 @@
                                     <TextBlock Text="{Binding ConnectionStatusText, StringFormat=Kết nối: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrintStatusText, StringFormat=In: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.PrinterCounter, StringFormat=Counter máy in: {0}}" Margin="0,0,0,6" />
-                                    <TextBlock Text="{Binding PrinterStatus.SoftwareCounter, StringFormat=Counter phần mềm: {0}}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrinterStatus.SoftwareCounter, StringFormat=Số dữ liệu đã gửi: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.BufferCount, StringFormat=Số dữ liệu trong buffer: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.LastSentSerial, StringFormat=Serial vừa gửi: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.LastPrintedSerial, StringFormat=Serial đã in gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <TextBlock Text="Log dữ liệu máy in trả về:" FontWeight="SemiBold" Margin="0,4,0,2" />
+                                    <TextBox Text="{Binding PrinterStatus.ReceivedRawDataLog}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" Height="110" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.LastError, StringFormat=Lỗi gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" Foreground="DarkRed" />
                                     <TextBlock Text="{Binding PrinterStatus.LastUpdatedAt, StringFormat=Thời gian cập nhật: {0:dd/MM/yyyy HH:mm:ss}}" Margin="0,0,0,6" />
                                 </StackPanel>
@@ -205,6 +208,9 @@
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.IpAddress, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
                                     <TextBlock Text="Port" />
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.Port, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
+                                    <TextBlock Text="License key (MAC)" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.LicenseKey, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
+                                    <TextBlock Text="Sinh theo MAC của máy in, tối đa 10 ký tự" FontSize="11" Foreground="#666666" TextWrapping="Wrap" Width="240" Margin="0,0,0,4" />
                                     <TextBlock Text="Timeout kết nối ms" />
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" Width="200" />
                                 </StackPanel>
@@ -322,18 +328,6 @@
                                 </Border>
                                 <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
                                     <StackPanel>
-                                        <TextBlock Text="Sai" Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                                        <TextBlock Text="{Binding InvalidCount}" FontSize="16" FontWeight="Bold" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
-                                    <StackPanel>
-                                        <TextBlock Text="Trùng" Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                                        <TextBlock Text="{Binding DuplicateCount}" FontSize="16" FontWeight="Bold" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
-                                    <StackPanel>
                                         <TextBlock Text="Chờ" Foreground="{StaticResource MutedBrush}" FontSize="12" />
                                         <TextBlock Text="{Binding WaitingCount}" FontSize="16" FontWeight="Bold" />
                                     </StackPanel>
@@ -354,6 +348,18 @@
                                     <StackPanel>
                                         <TextBlock Text="Còn lại" Foreground="{StaticResource MutedBrush}" FontSize="12" />
                                         <TextBlock Text="{Binding RemainingCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Sai" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding InvalidCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Trùng" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding DuplicateCount}" FontSize="16" FontWeight="Bold" />
                                     </StackPanel>
                                 </Border>
                             </WrapPanel>
@@ -444,6 +450,9 @@
         </Grid>
     </Grid>
 </Window>
+
+
+
 
 
 

@@ -14,6 +14,10 @@ public class PrinterConfig : ViewModelBase
     private int _targetSendPerSecond = 5;
     private bool _autoSendBufferWhenLow;
     private int _lowBufferThreshold = 20;
+    private bool _checksumEnabled;
+    private bool _metricModeEnabled;
+    private bool _extendedStatus;
+    private string _licenseKey = string.Empty;
 
     public string PrinterName
     {
@@ -73,5 +77,29 @@ public class PrinterConfig : ViewModelBase
     {
         get => _lowBufferThreshold;
         set => SetProperty(ref _lowBufferThreshold, value);
+    }
+
+    public bool ChecksumEnabled
+    {
+        get => _checksumEnabled;
+        set => SetProperty(ref _checksumEnabled, value);
+    }
+
+    public bool MetricModeEnabled
+    {
+        get => _metricModeEnabled;
+        set => SetProperty(ref _metricModeEnabled, value);
+    }
+
+    public bool ExtendedStatus
+    {
+        get => _extendedStatus;
+        set => SetProperty(ref _extendedStatus, value);
+    }
+
+    public string LicenseKey
+    {
+        get => _licenseKey;
+        set => SetProperty(ref _licenseKey, value);
     }
 }

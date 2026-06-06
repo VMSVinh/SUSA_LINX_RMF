@@ -70,6 +70,7 @@ public sealed class MainViewModel : ViewModelBase
         StartPrintCommand = new AsyncRelayCommand(StartPrintAsync, () => CanStartPrint);
         StopPrintCommand = new AsyncRelayCommand(StopPrintAsync, () => CanStopPrint);
         SendBufferCommand = new AsyncRelayCommand(SendBufferAsync, () => CanSendBuffer);
+        TestRemoteFieldDataCommand = new AsyncRelayCommand(TestRemoteFieldDataAsync, () => CanSendBuffer);
         GetPrinterStatusCommand = new AsyncRelayCommand(GetPrinterStatusAsync, () => IsConnected);
         ResetErrorCommand = new AsyncRelayCommand(ResetErrorAsync, () => IsConnected || !string.IsNullOrWhiteSpace(PrinterStatus.LastError));
 
@@ -88,6 +89,7 @@ public sealed class MainViewModel : ViewModelBase
             StartPrintCommand,
             StopPrintCommand,
             SendBufferCommand,
+            TestRemoteFieldDataCommand,
             GetPrinterStatusCommand,
             ResetErrorCommand
         });
@@ -268,7 +270,7 @@ public sealed class MainViewModel : ViewModelBase
 
     public int SentCount => SerialItems.Count(x => x.Status == SerialStatus.Sent);
 
-    public int PrintedCount => SerialItems.Count(x => x.Status == SerialStatus.Printed);
+    public int PrintedCount => PrinterStatus.PrinterCounter;
 
     public int ErrorCount => SerialItems.Count(x => x.Status == SerialStatus.Error);
 
@@ -353,6 +355,7 @@ public sealed class MainViewModel : ViewModelBase
     public IRelayCommand StartPrintCommand { get; }
     public IRelayCommand StopPrintCommand { get; }
     public IRelayCommand SendBufferCommand { get; }
+    public IRelayCommand TestRemoteFieldDataCommand { get; }
     public IRelayCommand GetPrinterStatusCommand { get; }
     public IRelayCommand ResetErrorCommand { get; }
 
@@ -586,6 +589,13 @@ public sealed class MainViewModel : ViewModelBase
 
         SerialItems = new ObservableCollection<SerialItem>(importedItems);
         TotalImportedCount = totalLines;
+        await _printerService.ResetSoftwareCounterAsync();
+        PrinterStatus.SoftwareCounter = 0;
+        PrinterStatus.BufferCount = 0;
+        PrinterStatus.LastSentSerial = string.Empty;
+        PrinterStatus.LastPrintedSerial = string.Empty;
+        PrinterStatus.LastError = string.Empty;
+        PrinterStatus.LastUpdatedAt = DateTime.Now;
         ReindexSerialItems();
         RefreshFilteredSerialItems();
         UpdateDerivedState();
@@ -598,6 +608,12 @@ public sealed class MainViewModel : ViewModelBase
         SerialItems.Clear();
         TotalImportedCount = 0;
         ImportFilePath = string.Empty;
+        PrinterStatus.SoftwareCounter = 0;
+        PrinterStatus.BufferCount = 0;
+        PrinterStatus.LastSentSerial = string.Empty;
+        PrinterStatus.LastPrintedSerial = string.Empty;
+        PrinterStatus.LastError = string.Empty;
+        PrinterStatus.LastUpdatedAt = DateTime.Now;
         RefreshFilteredSerialItems();
         UpdateDerivedState();
     }
@@ -708,13 +724,16 @@ public sealed class MainViewModel : ViewModelBase
             var connected = await _printerService.ConnectAsync(PrinterConfig);
             if (connected)
             {
+                await RefreshPrinterStatusAsync();
                 PrinterStatus.IsConnected = true;
                 PrinterStatus.LastError = string.Empty;
                 PrinterStatus.LastUpdatedAt = DateTime.Now;
             }
             else
             {
-                PrinterStatus.LastError = "Mất kết nối";
+                PrinterStatus.LastError = string.IsNullOrWhiteSpace(_printerService.LastError)
+                    ? "Mất kết nối"
+                    : _printerService.LastError;
             }
         }
         finally
@@ -778,29 +797,24 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        var bufferItems = SerialItems.Where(x => x.Status == SerialStatus.Waiting)
-                                     .Take(PrinterConfig.BufferSize)
-                                     .ToList();
+        var bufferItem = SerialItems.FirstOrDefault(x => x.Status == SerialStatus.Waiting);
 
-        if (bufferItems.Count == 0)
+        if (bufferItem is null)
         {
             MessageBox.Show("Đã hết dữ liệu in.", "Gửi Buffer", MessageBoxButton.OK, MessageBoxImage.Warning);
             UpdateDerivedState();
             return;
         }
 
-        var ok = await _printerService.SendBufferAsync(bufferItems);
+        var ok = await _printerService.SendBufferAsync(new[] { bufferItem });
         if (ok)
         {
-            foreach (var item in bufferItems)
-            {
-                item.Status = SerialStatus.Sent;
-                item.SentAt = DateTime.Now;
-                item.Note = string.Empty;
-            }
+            bufferItem.Status = SerialStatus.Sent;
+            bufferItem.SentAt = DateTime.Now;
+            bufferItem.Note = string.Empty;
 
-            PrinterStatus.SoftwareCounter += bufferItems.Count;
-            PrinterStatus.LastSentSerial = bufferItems.Last().Serial;
+            PrinterStatus.SoftwareCounter += 1;
+            PrinterStatus.LastSentSerial = bufferItem.Serial;
             PrinterStatus.BufferCount = SerialItems.Count(x => x.Status == SerialStatus.Sent);
             PrinterStatus.LastUpdatedAt = DateTime.Now;
             RefreshFilteredSerialItems();
@@ -809,14 +823,52 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        foreach (var item in bufferItems)
-        {
-            item.Status = SerialStatus.Error;
-            item.Note = "Gửi buffer thất bại";
-        }
+        bufferItem.Status = SerialStatus.Error;
+        bufferItem.Note = "Gửi buffer thất bại";
 
         PrinterStatus.LastError = "Gửi buffer thất bại";
         PrinterStatus.LastUpdatedAt = DateTime.Now;
+        UpdateDerivedState();
+        await SaveStateAsync();
+    }
+
+    private async Task TestRemoteFieldDataAsync()
+    {
+        if (!IsConnected)
+        {
+            MessageBox.Show("Chưa kết nối máy in.", "Test Remote Field Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var testItem = SerialItems.FirstOrDefault(x => x.Status == SerialStatus.Waiting);
+        if (testItem is null)
+        {
+            MessageBox.Show("Không có serial nào để test.", "Test Remote Field Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var ok = await _printerService.TestRemoteFieldDataAsync(testItem.Serial);
+        if (ok)
+        {
+            testItem.Status = SerialStatus.Sent;
+            testItem.SentAt = DateTime.Now;
+            testItem.Note = "Test gửi Remote Field Data";
+
+            PrinterStatus.SoftwareCounter += 1;
+            PrinterStatus.LastSentSerial = testItem.Serial;
+            PrinterStatus.LastError = string.Empty;
+            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            RefreshFilteredSerialItems();
+            UpdateDerivedState();
+            await SaveStateAsync();
+            return;
+        }
+
+        testItem.Status = SerialStatus.Error;
+        testItem.Note = "Test gửi Remote Field Data thất bại";
+        PrinterStatus.LastError = _printerService.LastError;
+        PrinterStatus.LastUpdatedAt = DateTime.Now;
+        RefreshFilteredSerialItems();
         UpdateDerivedState();
         await SaveStateAsync();
     }
@@ -844,10 +896,10 @@ public sealed class MainViewModel : ViewModelBase
             PrinterStatus.BufferCount = status.BufferCount;
             PrinterStatus.LastSentSerial = status.LastSentSerial;
             PrinterStatus.LastPrintedSerial = status.LastPrintedSerial;
+            PrinterStatus.LastReceivedRawData = status.LastReceivedRawData;
+            PrinterStatus.ReceivedRawDataLog = status.ReceivedRawDataLog;
             PrinterStatus.LastError = status.LastError;
             PrinterStatus.LastUpdatedAt = status.LastUpdatedAt;
-
-            PrinterStatus.BufferCount = SerialItems.Count(x => x.Status == SerialStatus.Sent);
             RefreshFilteredSerialItems();
             UpdateDerivedState();
             await SaveStateAsync();
@@ -904,3 +956,9 @@ public sealed class MainViewModel : ViewModelBase
         BindMockPrinterItems();
     }
 }
+
+
+
+
+
+

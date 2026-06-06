@@ -8,4 +8,8 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="D:\KHACH_HANG\SUNSTEEL\Source_Code\VmsDevice\VmsDevice\VmsDevice.csproj" />
+  </ItemGroup>
+
 </Project>

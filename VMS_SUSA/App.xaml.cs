@@ -13,7 +13,7 @@ public partial class App : Application
     {
         var fileDialogService = new FileDialogService();
         var appStateService = new JsonAppStateService();
-        var printerService = new MockPrinterService();
+        var printerService = new Linx8900PrinterService();
         _mainViewModel = new MainViewModel(printerService, appStateService, fileDialogService);
 
         var mainWindow = new MainWindow

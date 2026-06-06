@@ -17,6 +17,8 @@ public sealed class MockPrinterService : IPrinterService
     private string _lastError = string.Empty;
     private DateTime _lastUpdatedAt = DateTime.Now;
 
+    public string LastError => _lastError;
+
     public void BindSerialItems(IList<SerialItem> serialItems)
     {
         lock (_sync)
@@ -111,6 +113,25 @@ public sealed class MockPrinterService : IPrinterService
         return Task.FromResult(true);
     }
 
+    public Task<bool> TestRemoteFieldDataAsync(string serial)
+    {
+        lock (_sync)
+        {
+            if (!_isConnected || string.IsNullOrWhiteSpace(serial))
+            {
+                _lastError = "Không thể test gửi remote field data";
+                return Task.FromResult(false);
+            }
+
+            _softwareCounter += 1;
+            _lastSentSerial = serial.Trim();
+            _lastError = string.Empty;
+            _lastUpdatedAt = DateTime.Now;
+        }
+
+        return Task.FromResult(true);
+    }
+
     public Task<PrinterStatus> GetStatusAsync()
     {
         lock (_sync)
@@ -158,4 +179,16 @@ public sealed class MockPrinterService : IPrinterService
 
         return Task.FromResult(true);
     }
+
+    public Task ResetSoftwareCounterAsync()
+    {
+        lock (_sync)
+        {
+            _softwareCounter = 0;
+            _lastUpdatedAt = DateTime.Now;
+        }
+
+        return Task.CompletedTask;
+    }
 }
+
