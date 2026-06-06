@@ -1,0 +1,77 @@
+using VMS_SUSA.ViewModels;
+
+namespace VMS_SUSA.Models;
+
+public class PrinterConfig : ViewModelBase
+{
+    private string _printerName = "Máy in công nghiệp";
+    private string _modelName = string.Empty;
+    private string _ipAddress = "192.168.1.100";
+    private int _port = 9100;
+    private int _timeoutMs = 3000;
+    private int _serialLength = 20;
+    private int _bufferSize = 100;
+    private int _targetSendPerSecond = 5;
+    private bool _autoSendBufferWhenLow;
+    private int _lowBufferThreshold = 20;
+
+    public string PrinterName
+    {
+        get => _printerName;
+        set => SetProperty(ref _printerName, value);
+    }
+
+    public string ModelName
+    {
+        get => _modelName;
+        set => SetProperty(ref _modelName, value);
+    }
+
+    public string IpAddress
+    {
+        get => _ipAddress;
+        set => SetProperty(ref _ipAddress, value);
+    }
+
+    public int Port
+    {
+        get => _port;
+        set => SetProperty(ref _port, value);
+    }
+
+    public int TimeoutMs
+    {
+        get => _timeoutMs;
+        set => SetProperty(ref _timeoutMs, value);
+    }
+
+    public int SerialLength
+    {
+        get => _serialLength;
+        set => SetProperty(ref _serialLength, value);
+    }
+
+    public int BufferSize
+    {
+        get => _bufferSize;
+        set => SetProperty(ref _bufferSize, value);
+    }
+
+    public int TargetSendPerSecond
+    {
+        get => _targetSendPerSecond;
+        set => SetProperty(ref _targetSendPerSecond, value);
+    }
+
+    public bool AutoSendBufferWhenLow
+    {
+        get => _autoSendBufferWhenLow;
+        set => SetProperty(ref _autoSendBufferWhenLow, value);
+    }
+
+    public int LowBufferThreshold
+    {
+        get => _lowBufferThreshold;
+        set => SetProperty(ref _lowBufferThreshold, value);
+    }
+}

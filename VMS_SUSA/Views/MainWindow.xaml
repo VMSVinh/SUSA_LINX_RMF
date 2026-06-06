@@ -1,0 +1,451 @@
+<Window x:Class="VMS_SUSA.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="PHẦN MỀM IN DỮ LIỆU ĐỘNG"
+        Width="1600"
+        Height="900"
+        MinWidth="1280"
+        MinHeight="720"
+        WindowState="Maximized">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Background="{StaticResource HeaderBrush}"
+                CornerRadius="14"
+                Padding="14,10"
+                Margin="0,0,0,12"
+                MinHeight="68">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="PHẦN MỀM IN DỮ LIỆU ĐỘNG"
+                               Foreground="White"
+                               FontSize="20"
+                               FontWeight="Bold" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="#FFCBD5E1"
+                               FontSize="10"
+                               Text="{Binding LastStateSavedText}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Right"
+                            Orientation="Horizontal">
+                    <TextBlock Text="{Binding CurrentTimeText}"
+                               Foreground="White"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0" />
+
+                    <Border Background="#1A2940"
+                            CornerRadius="999"
+                            Padding="10,4"
+                            Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Kết nối: "
+                                       Foreground="#FFCBD5E1"
+                                       FontSize="11"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ConnectionStatusText}"
+                                       Foreground="White"
+                                       FontSize="11"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#1A2940"
+                            CornerRadius="999"
+                            Padding="10,4">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="In: "
+                                       Foreground="#FFCBD5E1"
+                                       FontSize="11"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding PrintStatusText}"
+                                       Foreground="White"
+                                       FontSize="11"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="560" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,12,0">
+                <StackPanel>
+                    <GroupBox Header="Vận hành máy in">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.05*" />
+                                <ColumnDefinition Width="0.95*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1*" />
+                                        <ColumnDefinition Width="1*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0"
+                                            Content="Kết nối"
+                                            Command="{Binding ConnectPrinterCommand}"
+                                            Style="{StaticResource SuccessButtonStyle}"
+                                            Margin="0,0,6,0" />
+                                    <Button Grid.Column="1"
+                                            Content="Ngắt kết nối"
+                                            Command="{Binding DisconnectPrinterCommand}"
+                                            Style="{StaticResource NeutralButtonStyle}"
+                                            Margin="6,0,0,0" />
+                                </Grid>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1*" />
+                                        <ColumnDefinition Width="1*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0"
+                                            Content="Start Print"
+                                            Command="{Binding StartPrintCommand}"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Margin="0,0,6,0" Height="40" />
+                                    <Button Grid.Column="1"
+                                            Content="Stop Print"
+                                            Command="{Binding StopPrintCommand}"
+                                            Style="{StaticResource DangerButtonStyle}"
+                                            Margin="6,0,0,0" Height="40" />
+                                </Grid>
+                                <Button Content="Gửi Buffer" Command="{Binding SendBufferCommand}" Style="{StaticResource SuccessButtonStyle}" Height="40" />
+                            </StackPanel>
+
+                            <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="10,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Giám sát vận hành" FontWeight="Bold" FontSize="16" Margin="0,0,0,10" />
+                                    <TextBlock Text="{Binding ConnectionStatusText, StringFormat=Kết nối: {0}}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrintStatusText, StringFormat=In: {0}}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrinterStatus.PrinterCounter, StringFormat=Counter máy in: {0}}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrinterStatus.SoftwareCounter, StringFormat=Counter phần mềm: {0}}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrinterStatus.BufferCount, StringFormat=Số dữ liệu trong buffer: {0}}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrinterStatus.LastSentSerial, StringFormat=Serial vừa gửi: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrinterStatus.LastPrintedSerial, StringFormat=Serial đã in gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrinterStatus.LastError, StringFormat=Lỗi gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" Foreground="DarkRed" />
+                                    <TextBlock Text="{Binding PrinterStatus.LastUpdatedAt, StringFormat=Thời gian cập nhật: {0:dd/MM/yyyy HH:mm:ss}}" Margin="0,0,0,6" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </GroupBox>
+
+                    <GroupBox Header="Cấu hình" Margin="0,0,0,8">
+                        <GroupBox.Resources>
+                            <Style x:Key="CompactConfigTextBoxStyle" TargetType="{x:Type TextBox}" BasedOn="{StaticResource {x:Type TextBox}}">
+                                <Setter Property="Margin" Value="0,0,0,4" />
+                                <Setter Property="Padding" Value="8,4" />
+                                <Setter Property="MinHeight" Value="30" />
+                                <Setter Property="Width" Value="270" />
+                                <Setter Property="HorizontalAlignment" Value="Left" />
+                            </Style>
+                            <Style x:Key="CompactConfigCheckBoxStyle" TargetType="{x:Type CheckBox}" BasedOn="{StaticResource {x:Type CheckBox}}">
+                                <Setter Property="Margin" Value="0,0,0,4" />
+                            </Style>
+                            <Style x:Key="CompactSuccessButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource SuccessButtonStyle}">
+                                <Setter Property="Padding" Value="10,4" />
+                                <Setter Property="Height" Value="30" />
+                                <Setter Property="MinHeight" Value="30" />
+                                <Setter Property="FontSize" Value="12" />
+                            </Style>
+                            <Style x:Key="CompactNeutralButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource NeutralButtonStyle}">
+                                <Setter Property="Padding" Value="10,4" />
+                                <Setter Property="Height" Value="30" />
+                                <Setter Property="MinHeight" Value="30" />
+                                <Setter Property="FontSize" Value="12" />
+                            </Style>
+                            <Style x:Key="CompactPrimaryButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                <Setter Property="Padding" Value="10,4" />
+                                <Setter Property="Height" Value="30" />
+                                <Setter Property="MinHeight" Value="30" />
+                                <Setter Property="FontSize" Value="12" />
+                            </Style>
+                        </GroupBox.Resources>
+                        <Grid Margin="0,2,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1*" />
+                                    <ColumnDefinition Width="1*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <TextBlock Text="Tên máy in" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.PrinterName, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                    <TextBlock Text="Model máy in" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.ModelName, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                    <TextBlock Text="IP máy in" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.IpAddress, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
+                                    <TextBlock Text="Port" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.Port, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
+                                    <TextBlock Text="Timeout kết nối ms" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Độ dài serial" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.SerialLength, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
+                                    <TextBlock Text="Kích thước buffer" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.BufferSize, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
+                                    <TextBlock Text="Tốc độ gửi mục tiêu" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.TargetSendPerSecond, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                    <CheckBox Style="{StaticResource CompactConfigCheckBoxStyle}" Content="Tự gửi buffer khi buffer thấp"
+                                              IsChecked="{Binding PrinterConfig.AutoSendBufferWhenLow}" />
+                                    <TextBlock Text="Ngưỡng buffer thấp" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.LowBufferThreshold, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Grid.Row="1"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        Margin="0,8,0,0">
+                                <Button Content="Lưu cấu hình"
+                                        Command="{Binding SaveConfigCommand}"
+                                        Style="{StaticResource CompactSuccessButtonStyle}"
+                                        Width="122"
+                                        Margin="0,0,8,0" Height="35" />
+                                <Button Content="Tải lại cấu hình"
+                                        Command="{Binding ReloadConfigCommand}"
+                                        Style="{StaticResource CompactNeutralButtonStyle}"
+                                        Width="132"
+                                        Margin="0,0,8,0" Height="35" />
+                                <Button Content="Kiểm tra kết nối"
+                                        Command="{Binding TestConnectionCommand}"
+                                        Style="{StaticResource CompactPrimaryButtonStyle}"
+                                        Width="150"
+                                        Margin="0" Height="35" />
+                            </StackPanel>
+                        </Grid>
+                    </GroupBox>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <GroupBox Grid.Row="0" Header="Dữ liệu serial" Margin="0,0,0,8" Padding="6">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0"
+                                Background="#FFF8FAFC"
+                                Padding="4"
+                                BorderBrush="{StaticResource BorderBrushSoft}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2.3*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox Grid.Column="0"
+                                         Height="34"
+                                         MinHeight="30"
+                                         VerticalContentAlignment="Center"
+                                         Margin="0,0,8,0"
+                                         Text="{Binding ImportFilePath, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Đường dẫn file .txt" />
+
+                                <Button Grid.Column="1"
+                                        Content="Chọn file"
+                                        Command="{Binding BrowseImportFileCommand}"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Height="30"
+                                        MinHeight="30"
+                                        Padding="10,4"
+                                        Margin="0,0,8,0" />
+
+                                <Button Grid.Column="2"
+                                        Content="Xuất lỗi"
+                                        Command="{Binding ExportErrorDataCommand}"
+                                        Style="{StaticResource NeutralButtonStyle}"
+                                        Width="102"
+                                        Height="30"
+                                        MinHeight="30"
+                                        Padding="10,4"
+                                        Margin="0" />
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Row="1" Margin="0,4,0,0">
+                            <TextBlock Text="Thống kê serial" FontSize="14" FontWeight="Bold" Margin="0,0,0,6" />
+                            <WrapPanel>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Tổng" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding TotalImportedCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Hợp lệ" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding ValidCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Sai" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding InvalidCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Trùng" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding DuplicateCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Chờ" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding WaitingCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Đã gửi" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding SentCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Đã in" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding PrintedCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Còn lại" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding RemainingCount}" FontSize="16" FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+                            </WrapPanel>
+
+                            <Border Background="{Binding WarningBrush}" CornerRadius="8" Padding="6" Margin="0,0,0,0">
+                                <TextBlock Text="{Binding SystemWarningText}"
+                                           Foreground="White"
+                                           FontSize="12"
+                                           FontWeight="Bold" />
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Grid.Row="1" Header="Danh sách serial" Margin="0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0"
+                                Background="#FFF8FAFC"
+                                Padding="4"
+                                Margin="0,0,0,6"
+                                BorderBrush="{StaticResource BorderBrushSoft}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2.2*" />
+                                    <ColumnDefinition Width="1.1*" />
+                                    <ColumnDefinition Width="0.8*" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox Grid.Column="0"
+                                         Margin="0,0,10,0"
+                                         Height="30"
+                                         MinHeight="30"
+                                         VerticalContentAlignment="Center"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Tìm nhanh theo serial" />
+
+                                <ComboBox Grid.Column="1"
+                                          Margin="0,0,10,0"
+                                          Height="30"
+                                          MinHeight="30"
+                                          ItemsSource="{Binding StatusFilterOptions}"
+                                          DisplayMemberPath="DisplayName"
+                                          SelectedValuePath="Value"
+                                          SelectedValue="{Binding SelectedStatusFilter, Mode=TwoWay}" />
+
+                                <Border Grid.Column="2"
+                                        Background="{StaticResource HeaderBrush}"
+                                        CornerRadius="8"
+                                        Padding="8,3"
+                                        Height="30">
+                                    <TextBlock Foreground="White"
+                                               FontWeight="SemiBold"
+                                               FontSize="12"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding DisplayedCount, StringFormat=Hiển thị: {0}}" />
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding FilteredSerialItems}"
+                                  AutoGenerateColumns="False"
+                                  CanUserSortColumns="True"
+                                  RowHeight="26"
+                                  ColumnHeaderHeight="28"
+                                  FontSize="12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="STT" Binding="{Binding Index}" Width="70" />
+                                <DataGridTextColumn Header="Serial" Binding="{Binding Serial}" Width="2*" />
+                                <DataGridTextColumn Header="Độ dài" Binding="{Binding Length}" Width="90" />
+                                <DataGridTextColumn Header="Trạng thái" Binding="{Binding StatusText}" Width="120" />
+                                <DataGridTextColumn Header="Thời gian gửi" Binding="{Binding SentAt, StringFormat={}{0:dd/MM/yyyy HH:mm:ss}, TargetNullValue=-}" Width="180" />
+                                <DataGridTextColumn Header="Thời gian in" Binding="{Binding PrintedAt, StringFormat={}{0:dd/MM/yyyy HH:mm:ss}, TargetNullValue=-}" Width="180" />
+                                <DataGridTextColumn Header="Ghi chú" Binding="{Binding Note}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </GroupBox>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>
+
+
+
+
+
