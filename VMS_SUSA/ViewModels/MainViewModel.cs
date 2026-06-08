@@ -75,8 +75,6 @@ public sealed class MainViewModel : ViewModelBase
         DisconnectPrinterCommand = new AsyncRelayCommand(DisconnectPrinterAsync, () => CanDisconnect);
         StartPrintCommand = new AsyncRelayCommand(StartPrintAsync, () => CanStartPrint);
         StopPrintCommand = new AsyncRelayCommand(StopPrintAsync, () => CanStopPrint);
-        SendBufferCommand = new AsyncRelayCommand(SendBufferAsync, () => CanSendBuffer);
-        Send1RemoteFieldDataCommand = new AsyncRelayCommand(Send1RemoteFieldDataAsync, () => CanSendBuffer);
         Send30RemoteFieldsThenStartPrintCommand = new AsyncRelayCommand(Send30RemoteFieldsThenStartPrintAsync, () => CanSend30RemoteFieldsThenStartPrint);
         ClearDataBufferCommand = new AsyncRelayCommand(ClearDataBufferAsync, () => IsConnected);
         GetPrinterStatusCommand = new AsyncRelayCommand(GetPrinterStatusAsync, () => IsConnected);
@@ -96,8 +94,6 @@ public sealed class MainViewModel : ViewModelBase
             DisconnectPrinterCommand,
             StartPrintCommand,
             StopPrintCommand,
-            SendBufferCommand,
-            Send1RemoteFieldDataCommand,
             Send30RemoteFieldsThenStartPrintCommand,
             ClearDataBufferCommand,
             GetPrinterStatusCommand,
@@ -384,8 +380,6 @@ public sealed class MainViewModel : ViewModelBase
     public IRelayCommand DisconnectPrinterCommand { get; }
     public IRelayCommand StartPrintCommand { get; }
     public IRelayCommand StopPrintCommand { get; }
-    public IRelayCommand SendBufferCommand { get; }
-    public IRelayCommand Send1RemoteFieldDataCommand { get; }
     public IRelayCommand Send30RemoteFieldsThenStartPrintCommand { get; }
     public IRelayCommand ClearDataBufferCommand { get; }
     public IRelayCommand GetPrinterStatusCommand { get; }
@@ -851,16 +845,6 @@ public sealed class MainViewModel : ViewModelBase
 
         UpdateDerivedState();
         await SaveStateAsync();
-    }
-
-    private async Task SendBufferAsync()
-    {
-        await SendNextRemoteFieldDataAsync("Gửi Buffer", showNoDataMessage: true);
-    }
-
-    private async Task Send1RemoteFieldDataAsync()
-    {
-        await SendNextRemoteFieldDataAsync("Gửi 1 Remote Field", showNoDataMessage: true);
     }
 
     private async Task Send30RemoteFieldsThenStartPrintAsync()

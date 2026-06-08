@@ -133,8 +133,6 @@
                                             Style="{StaticResource DangerButtonStyle}"
                                             Margin="6,0,0,0" Height="40" />
                                 </Grid>
-                                <Button Content="Gửi Buffer" Command="{Binding SendBufferCommand}" Style="{StaticResource SuccessButtonStyle}" Height="40" />
-                                <Button Content="Gửi 1 Remote Field" Command="{Binding Send1RemoteFieldDataCommand}" Style="{StaticResource NeutralButtonStyle}" Height="40" Margin="0,6,0,0" />
                                 <Grid Margin="0,6,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="1*" />
