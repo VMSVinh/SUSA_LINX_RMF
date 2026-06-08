@@ -358,6 +358,10 @@ public sealed class MainViewModel : ViewModelBase
             ? Brushes.Gray
             : Brushes.IndianRed;
 
+    public Brush HeaderBrush => PrinterStatus.IsPrinting
+        ? new SolidColorBrush(Color.FromRgb(0xD9, 0x8A, 0x1B))
+        : (Brush)new BrushConverter().ConvertFromString("#0F172A")!;
+
     public Brush WarningBrush => InvalidCount > 0 || DuplicateCount > 0 ? Brushes.Goldenrod : Brushes.SeaGreen;
 
     public string LastStateSavedText => _lastSavedAt == default
@@ -396,6 +400,7 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PrintStatusText));
         OnPropertyChanged(nameof(ConnectionStatusBrush));
         OnPropertyChanged(nameof(PrintStatusBrush));
+        OnPropertyChanged(nameof(HeaderBrush));
         OnPropertyChanged(nameof(CanConnect));
         OnPropertyChanged(nameof(CanDisconnect));
         OnPropertyChanged(nameof(CanStartPrint));
@@ -475,6 +480,7 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PrintStatusText));
         OnPropertyChanged(nameof(ConnectionStatusBrush));
         OnPropertyChanged(nameof(PrintStatusBrush));
+        OnPropertyChanged(nameof(HeaderBrush));
         OnPropertyChanged(nameof(WarningBrush));
         OnPropertyChanged(nameof(SystemWarningText));
         OnPropertyChanged(nameof(LastStateSavedText));
