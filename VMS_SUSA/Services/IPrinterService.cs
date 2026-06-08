@@ -14,6 +14,7 @@ public interface IPrinterService
     Task<bool> StopPrintAsync();
     Task<bool> SendBufferAsync(IEnumerable<SerialItem> items);
     Task<bool> Send1RemoteFieldDataAsync(string serial);
+    Task<bool> ClearDataBufferAsync();
     Task<PrinterStatus> GetStatusAsync();
     Task<bool> ResetErrorAsync();
     Task ResetSoftwareCounterAsync();

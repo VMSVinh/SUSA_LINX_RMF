@@ -78,6 +78,7 @@ public sealed class MainViewModel : ViewModelBase
         SendBufferCommand = new AsyncRelayCommand(SendBufferAsync, () => CanSendBuffer);
         Send1RemoteFieldDataCommand = new AsyncRelayCommand(Send1RemoteFieldDataAsync, () => CanSendBuffer);
         Send30RemoteFieldsThenStartPrintCommand = new AsyncRelayCommand(Send30RemoteFieldsThenStartPrintAsync, () => CanSend30RemoteFieldsThenStartPrint);
+        ClearDataBufferCommand = new AsyncRelayCommand(ClearDataBufferAsync, () => IsConnected);
         GetPrinterStatusCommand = new AsyncRelayCommand(GetPrinterStatusAsync, () => IsConnected);
         ResetErrorCommand = new AsyncRelayCommand(ResetErrorAsync, () => IsConnected || !string.IsNullOrWhiteSpace(PrinterStatus.LastError));
 
@@ -98,6 +99,7 @@ public sealed class MainViewModel : ViewModelBase
             SendBufferCommand,
             Send1RemoteFieldDataCommand,
             Send30RemoteFieldsThenStartPrintCommand,
+            ClearDataBufferCommand,
             GetPrinterStatusCommand,
             ResetErrorCommand
         });
@@ -317,6 +319,11 @@ public sealed class MainViewModel : ViewModelBase
 
     public bool CanEditConfig => !IsPrinting;
 
+    private bool ShouldStopPrintNow => IsConnected
+        && IsPrinting
+        && ValidCount > 0
+        && PrinterStatus.PrinterCounter >= ValidCount;
+
     public string CurrentTimeText
     {
         get => _currentTimeText;
@@ -380,6 +387,7 @@ public sealed class MainViewModel : ViewModelBase
     public IRelayCommand SendBufferCommand { get; }
     public IRelayCommand Send1RemoteFieldDataCommand { get; }
     public IRelayCommand Send30RemoteFieldsThenStartPrintCommand { get; }
+    public IRelayCommand ClearDataBufferCommand { get; }
     public IRelayCommand GetPrinterStatusCommand { get; }
     public IRelayCommand ResetErrorCommand { get; }
 
@@ -403,6 +411,7 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStopPrint));
         OnPropertyChanged(nameof(CanSendBuffer));
         OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
+        OnPropertyChanged(nameof(ClearDataBufferCommand));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(LastStateSavedText));
         UpdateCommandStates();
@@ -469,6 +478,7 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStopPrint));
         OnPropertyChanged(nameof(CanSendBuffer));
         OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
+        OnPropertyChanged(nameof(ClearDataBufferCommand));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(ConnectionStatusText));
         OnPropertyChanged(nameof(PrintStatusText));
@@ -524,6 +534,7 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStopPrint));
         OnPropertyChanged(nameof(CanSendBuffer));
         OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
+        OnPropertyChanged(nameof(ClearDataBufferCommand));
         OnPropertyChanged(nameof(CanEditConfig));
     }
 
@@ -922,6 +933,32 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    private async Task ClearDataBufferAsync()
+    {
+        if (!IsConnected)
+        {
+            MessageBox.Show("Chưa kết nối máy in.", "Xóa dữ liệu đệm", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (await _printerService.ClearDataBufferAsync())
+        {
+            PrinterStatus.BufferCount = 0;
+            PrinterStatus.LastError = string.Empty;
+            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            UpdateDerivedState();
+            await SaveStateAsync();
+            return;
+        }
+
+        PrinterStatus.LastError = string.IsNullOrWhiteSpace(_printerService.LastError)
+            ? "Xóa dữ liệu đệm thất bại"
+            : _printerService.LastError;
+        PrinterStatus.LastUpdatedAt = DateTime.Now;
+        UpdateDerivedState();
+        await SaveStateAsync();
+    }
+
     private async Task HandlePrinterTriggerAsync(string rawData)
     {
         await _remoteFieldSendLock.WaitAsync();
@@ -953,7 +990,10 @@ public sealed class MainViewModel : ViewModelBase
 
     private async Task MarkMostRecentPrintedAsync()
     {
-        var item = SerialItems.LastOrDefault(x => x.Status == SerialStatus.Sent && x.PrintedAt is null);
+        var item = SerialItems
+            .Where(x => x.Status == SerialStatus.Sent && x.PrintedAt is null)
+            .OrderBy(x => x.Index)
+            .FirstOrDefault();
         if (item is null)
         {
             return;
@@ -964,6 +1004,94 @@ public sealed class MainViewModel : ViewModelBase
         item.Note = string.Empty;
         PrinterStatus.LastPrintedSerial = item.Serial;
         PrinterStatus.LastUpdatedAt = DateTime.Now;
+        RefreshFilteredSerialItems();
+        UpdateDerivedState();
+        await _printerDataLogService.SaveSerialItemsAsync(SerialItems);
+    }
+
+    private async Task SyncPrintedItemsToPrinterCounterAsync()
+    {
+        var targetPrintedCount = Math.Min(PrinterStatus.PrinterCounter, ValidCount);
+        if (targetPrintedCount < 0)
+        {
+            targetPrintedCount = 0;
+        }
+
+        var validItems = SerialItems
+            .Where(x => x.Status is SerialStatus.Waiting or SerialStatus.Sent or SerialStatus.Printed)
+            .OrderBy(x => x.Index)
+            .ToList();
+
+        if (validItems.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTime.Now;
+        var changed = false;
+
+        for (var i = 0; i < validItems.Count; i++)
+        {
+            var item = validItems[i];
+            if (i < targetPrintedCount)
+            {
+                if (item.Status != SerialStatus.Printed || item.PrintedAt is null)
+                {
+                    item.Status = SerialStatus.Printed;
+                    item.PrintedAt = now;
+                    item.Note = string.Empty;
+                    changed = true;
+                }
+            }
+            else if (item.Status == SerialStatus.Printed)
+            {
+                item.Status = item.SentAt is not null ? SerialStatus.Sent : SerialStatus.Waiting;
+                item.PrintedAt = null;
+                changed = true;
+            }
+        }
+
+        if (targetPrintedCount > 0 && targetPrintedCount <= validItems.Count)
+        {
+            PrinterStatus.LastPrintedSerial = validItems[targetPrintedCount - 1].Serial;
+        }
+        else if (targetPrintedCount == 0)
+        {
+            PrinterStatus.LastPrintedSerial = string.Empty;
+        }
+
+        PrinterStatus.LastUpdatedAt = now;
+        RefreshFilteredSerialItems();
+        UpdateDerivedState();
+
+        if (changed)
+        {
+            await _printerDataLogService.SaveSerialItemsAsync(SerialItems);
+        }
+    }
+
+    private async Task FinalizeRemainingSentItemsAsync()
+    {
+        var remainingSentItems = SerialItems
+            .Where(x => x.Status == SerialStatus.Sent && x.PrintedAt is null)
+            .OrderBy(x => x.Index)
+            .ToList();
+
+        if (remainingSentItems.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTime.Now;
+        foreach (var item in remainingSentItems)
+        {
+            item.Status = SerialStatus.Printed;
+            item.PrintedAt = now;
+            item.Note = string.Empty;
+        }
+
+        PrinterStatus.LastPrintedSerial = remainingSentItems.Last().Serial;
+        PrinterStatus.LastUpdatedAt = now;
         RefreshFilteredSerialItems();
         UpdateDerivedState();
         await _printerDataLogService.SaveSerialItemsAsync(SerialItems);
@@ -989,8 +1117,11 @@ public sealed class MainViewModel : ViewModelBase
                 MessageBox.Show("Đã hết dữ liệu in.", actionTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             }
 
-            if (IsConnected && IsPrinting)
+            await SyncPrintedItemsToPrinterCounterAsync();
+
+            if (ShouldStopPrintNow)
             {
+                await FinalizeRemainingSentItemsAsync();
                 await StopPrintAsync();
             }
 
@@ -1055,6 +1186,16 @@ public sealed class MainViewModel : ViewModelBase
             PrinterStatus.LastUpdatedAt = status.LastUpdatedAt;
             RefreshFilteredSerialItems();
             UpdateDerivedState();
+
+            await SyncPrintedItemsToPrinterCounterAsync();
+
+            if (ShouldStopPrintNow)
+            {
+                await FinalizeRemainingSentItemsAsync();
+                await StopPrintAsync();
+                return;
+            }
+
             await SaveStateAsync();
         }
         finally

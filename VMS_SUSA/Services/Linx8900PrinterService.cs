@@ -265,6 +265,30 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
         return true;
     }
 
+    public async Task<bool> ClearDataBufferAsync()
+    {
+        if (!IsConnected())
+        {
+            _status.LastError = "Chưa kết nối máy in";
+            _status.LastUpdatedAt = DateTime.Now;
+            return false;
+        }
+
+        var sent = await SendDownloadRemoteFieldDataNoResponseAsync(Array.Empty<byte>()).ConfigureAwait(false);
+        if (!sent)
+        {
+            _status.LastError = "Xóa dữ liệu đệm thất bại.";
+            _status.LastUpdatedAt = DateTime.Now;
+            return false;
+        }
+
+        AppendRawLog("1B-02-1D-00-00-1B-03");
+        _status.BufferCount = 0;
+        _status.LastError = string.Empty;
+        _status.LastUpdatedAt = DateTime.Now;
+        return true;
+    }
+
     public async Task<PrinterStatus> GetStatusAsync()
     {
         if (!IsConnected())
@@ -524,6 +548,45 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
                 LinxCommands.DownloadRemoteFieldData,
                 payload.ToArray())
             .ConfigureAwait(false);
+    }
+
+    private async Task<bool> SendDownloadRemoteFieldDataNoResponseAsync(byte[] fieldData)
+    {
+        var payload = new List<byte>(fieldData.Length + 2);
+        payload.AddRange(BitConverter.GetBytes((ushort)fieldData.Length));
+        payload.AddRange(fieldData);
+
+        if (_stream is null || !_stream.CanWrite)
+        {
+            return false;
+        }
+
+        await _commandLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var packet = LinxPacketBuilder.BuildPacket(
+                LinxCommands.DownloadRemoteFieldData,
+                payload.ToArray(),
+                GetDelimiter(),
+                _config.ChecksumEnabled);
+
+            await _stream.WriteAsync(packet).ConfigureAwait(false);
+
+#if DEBUG
+            Console.WriteLine($"[SEND] {BitConverter.ToString(packet)}");
+#endif
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _status.LastError = $"Unhandled exception: {ex.Message}";
+            _status.LastUpdatedAt = DateTime.Now;
+            return false;
+        }
+        finally
+        {
+            _commandLock.Release();
+        }
     }
 
     private async Task<CommandResult> SendCommandAsync(

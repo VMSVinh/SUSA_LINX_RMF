@@ -135,11 +135,24 @@
                                 </Grid>
                                 <Button Content="Gửi Buffer" Command="{Binding SendBufferCommand}" Style="{StaticResource SuccessButtonStyle}" Height="40" />
                                 <Button Content="Gửi 1 Remote Field" Command="{Binding Send1RemoteFieldDataCommand}" Style="{StaticResource NeutralButtonStyle}" Height="40" Margin="0,6,0,0" />
-                                <Button Content="Gửi 30 rồi Start Print"
-                                        Command="{Binding Send30RemoteFieldsThenStartPrintCommand}"
-                                        Style="{StaticResource PrimaryButtonStyle}"
-                                        Height="40"
-                                        Margin="0,6,0,0" />
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1*" />
+                                        <ColumnDefinition Width="1*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0"
+                                            Content="Gửi 30 rồi Start Print"
+                                            Command="{Binding Send30RemoteFieldsThenStartPrintCommand}"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Height="40"
+                                            Margin="0,0,6,0" />
+                                    <Button Grid.Column="1"
+                                            Content="Xóa dữ liệu đệm"
+                                            Command="{Binding ClearDataBufferCommand}"
+                                            Style="{StaticResource NeutralButtonStyle}"
+                                            Height="40"
+                                            Margin="6,0,0,0" />
+                                </Grid>
                             </StackPanel>
 
                             <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="10,0,0,0">
@@ -347,7 +360,7 @@
                                 <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
                                     <StackPanel>
                                         <TextBlock Text="Đã gửi" Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                                        <TextBlock Text="{Binding SentCount}" FontSize="16" FontWeight="Bold" />
+                                        <TextBlock Text="{Binding PrinterStatus.SoftwareCounter}" FontSize="16" FontWeight="Bold" />
                                     </StackPanel>
                                 </Border>
                                 <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
