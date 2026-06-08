@@ -4,8 +4,11 @@ namespace VMS_SUSA.Services;
 
 public sealed class MockPrinterService : IPrinterService
 {
+    public event EventHandler<PrinterTriggerReceivedEventArgs>? PrintTriggerReceived;
+
     private readonly Random _random = new();
     private readonly object _sync = new();
+    private readonly IPrinterDataLogService? _dataLogService;
     private IList<SerialItem> _serialItems = new List<SerialItem>();
     private bool _isConnected;
     private bool _isPrinting;
@@ -16,6 +19,11 @@ public sealed class MockPrinterService : IPrinterService
     private string _lastPrintedSerial = string.Empty;
     private string _lastError = string.Empty;
     private DateTime _lastUpdatedAt = DateTime.Now;
+
+    public MockPrinterService(IPrinterDataLogService? dataLogService = null)
+    {
+        _dataLogService = dataLogService;
+    }
 
     public string LastError => _lastError;
 
@@ -30,6 +38,7 @@ public sealed class MockPrinterService : IPrinterService
     public async Task<bool> ConnectAsync(PrinterConfig config)
     {
         await Task.Delay(500);
+
         lock (_sync)
         {
             _isConnected = true;
@@ -37,6 +46,7 @@ public sealed class MockPrinterService : IPrinterService
             _lastUpdatedAt = DateTime.Now;
         }
 
+        QueuePrintTriggerIfNeeded();
         return true;
     }
 
@@ -66,6 +76,7 @@ public sealed class MockPrinterService : IPrinterService
             _lastUpdatedAt = DateTime.Now;
         }
 
+        QueuePrintTriggerIfNeeded();
         return Task.FromResult(true);
     }
 
@@ -88,6 +99,7 @@ public sealed class MockPrinterService : IPrinterService
     public Task<bool> SendBufferAsync(IEnumerable<SerialItem> items)
     {
         var bufferItems = items.ToList();
+
         lock (_sync)
         {
             if (!_isConnected || bufferItems.Count == 0)
@@ -113,7 +125,7 @@ public sealed class MockPrinterService : IPrinterService
         return Task.FromResult(true);
     }
 
-    public Task<bool> TestRemoteFieldDataAsync(string serial)
+    public Task<bool> Send1RemoteFieldDataAsync(string serial)
     {
         lock (_sync)
         {
@@ -123,12 +135,30 @@ public sealed class MockPrinterService : IPrinterService
                 return Task.FromResult(false);
             }
 
+            var targetItem = _serialItems.FirstOrDefault(
+                x => x.Status == SerialStatus.Waiting &&
+                     string.Equals(x.Serial?.Trim(), serial.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            if (targetItem is null)
+            {
+                targetItem = _serialItems.FirstOrDefault(x => x.Status == SerialStatus.Waiting);
+            }
+
+            if (targetItem is not null)
+            {
+                targetItem.Status = SerialStatus.Sent;
+                targetItem.SentAt = DateTime.Now;
+                targetItem.Note = string.Empty;
+            }
+
             _softwareCounter += 1;
             _lastSentSerial = serial.Trim();
             _lastError = string.Empty;
             _lastUpdatedAt = DateTime.Now;
+            _bufferCount = _serialItems.Count(x => x.Status == SerialStatus.Sent);
         }
 
+        QueuePrintTriggerIfNeeded();
         return Task.FromResult(true);
     }
 
@@ -190,5 +220,41 @@ public sealed class MockPrinterService : IPrinterService
 
         return Task.CompletedTask;
     }
-}
 
+    private void QueuePrintTriggerIfNeeded()
+    {
+        bool shouldTrigger;
+
+        lock (_sync)
+        {
+            shouldTrigger = _isConnected && _isPrinting && _serialItems.Any(x => x.Status == SerialStatus.Waiting);
+        }
+
+        if (!shouldTrigger)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(200);
+            PrintTriggerReceived?.Invoke(this, new PrinterTriggerReceivedEventArgs("1B-0F"));
+            await AppendRawLogAsync("[TRIGGER] 1B-0F");
+        });
+    }
+
+    private async Task AppendRawLogAsync(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        if (_dataLogService is null)
+        {
+            return;
+        }
+
+        await _dataLogService.AppendRawAsync(line);
+    }
+}

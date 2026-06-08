@@ -11,6 +11,7 @@ namespace VMS_SUSA.Services;
 
 public sealed class Linx8900PrinterService : IPrinterService, IDisposable
 {
+    public event EventHandler<PrinterTriggerReceivedEventArgs>? PrintTriggerReceived;
     private const int DefaultCommandTimeoutMs = 5000;
     private static readonly byte[] PrintTriggerSequence = [0x1B, 0x0F];
     private static readonly byte[] PacketTerminator = [0x1B, 0x03];
@@ -22,6 +23,7 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
     private readonly Queue<QueuedSerial> _serialQueue = new();
     private readonly List<byte> _receiveBuffer = new();
     private readonly PrinterStatus _status = new();
+    private readonly IPrinterDataLogService? _dataLogService;
     private TcpClient? _client;
     private NetworkStream? _stream;
     private CancellationTokenSource? _listenerCts;
@@ -29,6 +31,11 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
     private TaskCompletionSource<byte[]>? _pendingResponse;
     private PrinterConfig _config = new();
     private bool _disposed;
+
+    public Linx8900PrinterService(IPrinterDataLogService? dataLogService = null)
+    {
+        _dataLogService = dataLogService;
+    }
 
     private sealed record QueuedSerial(string Serial, DateTime EnqueuedAt);
 
@@ -225,7 +232,7 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
         return Task.FromResult(true);
     }
 
-    public async Task<bool> TestRemoteFieldDataAsync(string serial)
+    public async Task<bool> Send1RemoteFieldDataAsync(string serial)
     {
         if (!IsConnected())
         {
@@ -413,6 +420,7 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
             {
                 _status.LastReceivedRawData = BitConverter.ToString(packet);
                 _status.LastUpdatedAt = DateTime.Now;
+                AppendRawLog("[RX] " + BitConverter.ToString(packet));
                 CompletePendingResponse(LinxPacketBuilder.RemoveEscapedBytes(packet));
                 continue;
             }
@@ -423,7 +431,8 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
                 _status.LastUpdatedAt = DateTime.Now;
                 AppendRawLog("[TRIGGER] 1B-0F");
                 IncrementPrinterCounter();
-                _ = Task.Run(ProcessPrintTriggerAsync);
+                _status.IsPrinting = true;
+                PrintTriggerReceived?.Invoke(this, new PrinterTriggerReceivedEventArgs("1B-0F"));
                 continue;
             }
         }
@@ -671,11 +680,9 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
             return;
         }
 
-        var current = _status.ReceivedRawDataLog;
-        _status.ReceivedRawDataLog = string.IsNullOrWhiteSpace(current)
-            ? line
-            : current + Environment.NewLine + line;
+        _status.ReceivedRawDataLog = line;
         _status.LastUpdatedAt = DateTime.Now;
+        _ = _dataLogService?.AppendRawAsync(line);
     }
 
     private static string FormatRawFrame(byte[]? response)
@@ -758,5 +765,14 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
         return -1;
     }
 }
+
+
+
+
+
+
+
+
+
 
 

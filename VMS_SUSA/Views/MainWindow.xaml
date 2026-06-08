@@ -134,7 +134,12 @@
                                             Margin="6,0,0,0" Height="40" />
                                 </Grid>
                                 <Button Content="Gửi Buffer" Command="{Binding SendBufferCommand}" Style="{StaticResource SuccessButtonStyle}" Height="40" />
-                                <Button Content="Test Remote Field" Command="{Binding TestRemoteFieldDataCommand}" Style="{StaticResource NeutralButtonStyle}" Height="40" Margin="0,6,0,0" />
+                                <Button Content="Gửi 1 Remote Field" Command="{Binding Send1RemoteFieldDataCommand}" Style="{StaticResource NeutralButtonStyle}" Height="40" Margin="0,6,0,0" />
+                                <Button Content="Gửi 30 rồi Start Print"
+                                        Command="{Binding Send30RemoteFieldsThenStartPrintCommand}"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Height="40"
+                                        Margin="0,6,0,0" />
                             </StackPanel>
 
                             <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="10,0,0,0">
@@ -142,13 +147,20 @@
                                     <TextBlock Text="Giám sát vận hành" FontWeight="Bold" FontSize="16" Margin="0,0,0,10" />
                                     <TextBlock Text="{Binding ConnectionStatusText, StringFormat=Kết nối: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrintStatusText, StringFormat=In: {0}}" Margin="0,0,0,6" />
-                                    <TextBlock Text="{Binding PrinterStatus.PrinterCounter, StringFormat=Counter máy in: {0}}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding PrintedCount, StringFormat=Counter máy in: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.SoftwareCounter, StringFormat=Số dữ liệu đã gửi: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.BufferCount, StringFormat=Số dữ liệu trong buffer: {0}}" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.LastSentSerial, StringFormat=Serial vừa gửi: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.LastPrintedSerial, StringFormat=Serial đã in gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <TextBlock Text="Log dữ liệu máy in trả về:" FontWeight="SemiBold" Margin="0,4,0,2" />
-                                    <TextBox Text="{Binding PrinterStatus.ReceivedRawDataLog}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" Height="110" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Margin="0,0,0,6" />
+                                    <TextBox Text="{Binding PrinterStatus.ReceivedRawDataLog}"
+                                             IsReadOnly="True"
+                                             TextWrapping="NoWrap"
+                                             AcceptsReturn="False"
+                                             Height="34"
+                                             VerticalScrollBarVisibility="Disabled"
+                                             HorizontalScrollBarVisibility="Auto"
+                                             Margin="0,0,0,6" />
                                     <TextBlock Text="{Binding PrinterStatus.LastError, StringFormat=Lỗi gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" Foreground="DarkRed" />
                                     <TextBlock Text="{Binding PrinterStatus.LastUpdatedAt, StringFormat=Thời gian cập nhật: {0:dd/MM/yyyy HH:mm:ss}}" Margin="0,0,0,6" />
                                 </StackPanel>
@@ -450,6 +462,7 @@
         </Grid>
     </Grid>
 </Window>
+
 
 
 
