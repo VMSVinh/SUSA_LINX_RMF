@@ -18,4 +18,5 @@ public interface IPrinterService
     Task<PrinterStatus> GetStatusAsync();
     Task<bool> ResetErrorAsync();
     Task ResetSoftwareCounterAsync();
+    Task SetSoftwareCounterAsync(int softwareCounter);
 }

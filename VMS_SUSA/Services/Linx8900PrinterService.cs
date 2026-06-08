@@ -327,6 +327,13 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
         return Task.CompletedTask;
     }
 
+    public Task SetSoftwareCounterAsync(int softwareCounter)
+    {
+        _status.SoftwareCounter = Math.Max(0, softwareCounter);
+        _status.LastUpdatedAt = DateTime.Now;
+        return Task.CompletedTask;
+    }
+
     public void Dispose()
     {
         if (_disposed)

@@ -239,6 +239,17 @@ public sealed class MockPrinterService : IPrinterService
         return Task.CompletedTask;
     }
 
+    public Task SetSoftwareCounterAsync(int softwareCounter)
+    {
+        lock (_sync)
+        {
+            _softwareCounter = Math.Max(0, softwareCounter);
+            _lastUpdatedAt = DateTime.Now;
+        }
+
+        return Task.CompletedTask;
+    }
+
     private void QueuePrintTriggerIfNeeded()
     {
         bool shouldTrigger;

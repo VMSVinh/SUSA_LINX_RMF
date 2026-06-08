@@ -69,7 +69,6 @@ public sealed class MainViewModel : ViewModelBase
 
         SaveConfigCommand = new AsyncRelayCommand(SaveConfigAsync);
         ReloadConfigCommand = new AsyncRelayCommand(ReloadConfigAsync);
-        TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, () => !IsConnecting);
 
         ConnectPrinterCommand = new AsyncRelayCommand(ConnectPrinterAsync, () => CanConnect);
         DisconnectPrinterCommand = new AsyncRelayCommand(DisconnectPrinterAsync, () => CanDisconnect);
@@ -89,7 +88,6 @@ public sealed class MainViewModel : ViewModelBase
             ExportErrorDataCommand,
             SaveConfigCommand,
             ReloadConfigCommand,
-            TestConnectionCommand,
             ConnectPrinterCommand,
             DisconnectPrinterCommand,
             StartPrintCommand,
@@ -374,7 +372,6 @@ public sealed class MainViewModel : ViewModelBase
 
     public IRelayCommand SaveConfigCommand { get; }
     public IRelayCommand ReloadConfigCommand { get; }
-    public IRelayCommand TestConnectionCommand { get; }
 
     public IRelayCommand ConnectPrinterCommand { get; }
     public IRelayCommand DisconnectPrinterCommand { get; }
@@ -758,11 +755,6 @@ public sealed class MainViewModel : ViewModelBase
         MessageBox.Show("Đã tải lại dữ liệu cấu hình và kết quả từ Data Logs.", "Tải lại cấu hình", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private async Task TestConnectionAsync()
-    {
-        await ConnectPrinterAsync();
-    }
-
     private async Task ConnectPrinterAsync()
     {
         if (IsConnected || IsConnecting)
@@ -776,9 +768,11 @@ public sealed class MainViewModel : ViewModelBase
             UpdateDerivedState();
             await Task.Delay(300);
 
+            var persistedSoftwareCounter = PrinterStatus.SoftwareCounter;
             var connected = await _printerService.ConnectAsync(PrinterConfig);
             if (connected)
             {
+                await _printerService.SetSoftwareCounterAsync(persistedSoftwareCounter);
                 await RefreshPrinterStatusAsync();
                 PrinterStatus.IsConnected = true;
                 PrinterStatus.IsPrinting = false;
