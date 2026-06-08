@@ -10,10 +10,6 @@ public class PrinterConfig : ViewModelBase
     private int _port = 9100;
     private int _timeoutMs = 3000;
     private int _serialLength = 20;
-    private int _bufferSize = 100;
-    private int _targetSendPerSecond = 5;
-    private bool _autoSendBufferWhenLow;
-    private int _lowBufferThreshold = 20;
     private bool _checksumEnabled;
     private bool _metricModeEnabled;
     private bool _extendedStatus;
@@ -53,30 +49,6 @@ public class PrinterConfig : ViewModelBase
     {
         get => _serialLength;
         set => SetProperty(ref _serialLength, value);
-    }
-
-    public int BufferSize
-    {
-        get => _bufferSize;
-        set => SetProperty(ref _bufferSize, value);
-    }
-
-    public int TargetSendPerSecond
-    {
-        get => _targetSendPerSecond;
-        set => SetProperty(ref _targetSendPerSecond, value);
-    }
-
-    public bool AutoSendBufferWhenLow
-    {
-        get => _autoSendBufferWhenLow;
-        set => SetProperty(ref _autoSendBufferWhenLow, value);
-    }
-
-    public int LowBufferThreshold
-    {
-        get => _lowBufferThreshold;
-        set => SetProperty(ref _lowBufferThreshold, value);
     }
 
     public bool ChecksumEnabled

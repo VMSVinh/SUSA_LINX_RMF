@@ -220,6 +220,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1*" />
                                     <ColumnDefinition Width="1*" />
+                                    <ColumnDefinition Width="1*" />
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
@@ -227,28 +228,22 @@
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.PrinterName, UpdateSourceTrigger=PropertyChanged}" Width="200" />
                                     <TextBlock Text="Model máy in" />
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.ModelName, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                    <TextBlock Text="Độ dài serial" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.SerialLength, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Margin="0,0,8,0">
                                     <TextBlock Text="IP máy in" />
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.IpAddress, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
                                     <TextBlock Text="Port" />
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.Port, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
-                                    <TextBlock Text="License key (MAC)" />
-                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.LicenseKey, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
-                                    <TextBlock Text="Sinh theo MAC của máy in, tối đa 10 ký tự" FontSize="11" Foreground="#666666" TextWrapping="Wrap" Width="240" Margin="0,0,0,4" />
                                     <TextBlock Text="Timeout kết nối ms" />
                                     <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" Width="200" />
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1">
-                                    <TextBlock Text="Độ dài serial" />
-                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.SerialLength, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
-                                    <TextBlock Text="Kích thước buffer" />
-                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.BufferSize, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
-                                    <TextBlock Text="Tốc độ gửi mục tiêu" />
-                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.TargetSendPerSecond, UpdateSourceTrigger=PropertyChanged}" Width="200" />
-                                    <CheckBox Style="{StaticResource CompactConfigCheckBoxStyle}" Content="Tự gửi buffer khi buffer thấp"
-                                              IsChecked="{Binding PrinterConfig.AutoSendBufferWhenLow}" />
-                                    <TextBlock Text="Ngưỡng buffer thấp" />
-                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.LowBufferThreshold, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="License key (MAC)" />
+                                    <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.LicenseKey, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="200" />
                                 </StackPanel>
                             </Grid>
 
