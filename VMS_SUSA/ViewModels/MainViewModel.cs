@@ -331,18 +331,18 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     public string ConnectionStatusText => _isConnecting
-        ? "Đang kết nối"
+        ? "ĐANG KẾT NỐI"
         : PrinterStatus.IsConnected
-            ? "Đã kết nối"
+            ? "ĐÃ KẾT NỐI"
             : string.IsNullOrWhiteSpace(PrinterStatus.LastError)
-                ? "Chưa kết nối"
-                : "Mất kết nối";
+                ? "CHƯA KẾT NỐI"
+                : "MẤT KẾT NỐI";
 
     public string PrintStatusText => PrinterStatus.IsPrinting
-        ? "Đang in"
+        ? "ĐANG IN"
         : string.IsNullOrWhiteSpace(PrinterStatus.LastError)
-            ? "Dừng"
-            : "Lỗi";
+            ? "DỪNG"
+            : "LỖI";
 
     public Brush ConnectionStatusBrush => _isConnecting
         ? Brushes.Goldenrod
