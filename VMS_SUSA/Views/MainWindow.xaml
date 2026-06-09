@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="PHẦN MỀM IN DỮ LIỆU ĐỘNG"
+        Title="https://vmsco.vn/"
         Icon="pack://application:,,,/LogoVMS.ico"
         Width="1600"
         Height="900"
@@ -17,71 +17,90 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Background="{Binding HeaderBrush}"
-                CornerRadius="14"
-                Padding="14,10"
-                Margin="0,0,0,12"
-                MinHeight="68">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <Grid Grid.Row="0" Margin="0,0,0,12" MinHeight="68">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="PHẦN MỀM IN DỮ LIỆU ĐỘNG"
-                               Foreground="White"
-                               FontSize="20"
-                               FontWeight="Bold" />
-                </StackPanel>
+            <Border Grid.Column="0"
+                    Background="Transparent"
+                    Padding="0"
+                    Margin="0,0,12,0"
+                    VerticalAlignment="Stretch">
+                <Image Source="pack://application:,,,/LOGO-VMS-VN.png"
+                       Height="62"
+                       Margin="4,0,0,0"
+                       VerticalAlignment="Center"
+                       Stretch="Uniform" />
+            </Border>
 
-                <StackPanel Grid.Column="1"
-                            VerticalAlignment="Center"
-                            HorizontalAlignment="Right"
-                            Orientation="Horizontal">
-                    <TextBlock Text="{Binding CurrentTimeText}"
-                               Foreground="White"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               Margin="0,0,10,0" />
+            <Border Grid.Column="1"
+                    Background="{Binding HeaderBrush}"
+                    CornerRadius="14"
+                    Padding="14,10"
+                    MinHeight="68">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                    <Border Background="{Binding ConnectionStatusBrush}"
-                            CornerRadius="999"
-                            Padding="12,5"
-                            Margin="0,0,8,0">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="KẾT NỐI: "
-                                       Foreground="#FFCBD5E1"
-                                       FontSize="13"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding ConnectionStatusText}"
-                                       Foreground="White"
-                                       FontSize="13"
-                                       FontWeight="Bold"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="PHẦN MỀM IN DỮ LIỆU ĐỘNG"
+                                   Foreground="White"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
 
-                    <Border Background="#1A2940"
-                            CornerRadius="999"
-                            Padding="12,5">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="IN: "
-                                       Foreground="#FFCBD5E1"
-                                       FontSize="13"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding PrintStatusText}"
-                                       Foreground="White"
-                                       FontSize="13"
-                                       FontWeight="Bold"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </Grid>
-        </Border>
+                    <StackPanel Grid.Column="1"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Right"
+                                Orientation="Horizontal">
+                        <TextBlock Text="{Binding CurrentTimeText}"
+                                   Foreground="White"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0" />
+
+                        <Border Background="{Binding ConnectionStatusBrush}"
+                                CornerRadius="999"
+                                Padding="12,5"
+                                Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="KẾT NỐI: "
+                                           Foreground="#FFCBD5E1"
+                                           FontSize="13"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ConnectionStatusText}"
+                                           Foreground="White"
+                                           FontSize="13"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="#1A2940"
+                                CornerRadius="999"
+                                Padding="12,5">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="IN: "
+                                           Foreground="#FFCBD5E1"
+                                           FontSize="13"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding PrintStatusText}"
+                                           Foreground="White"
+                                           FontSize="13"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="560" />
@@ -194,45 +213,45 @@
                                     <Setter Property="Height" Value="30" />
                                     <Setter Property="MinHeight" Value="30" />
                                     <Setter Property="FontSize" Value="12" />
-                            </Style>
-                        </GroupBox.Resources>
-                        <StackPanel Margin="0,2,0,0">
-                            <TextBlock Text="Tên máy in" />
-                            <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.PrinterName, UpdateSourceTrigger=PropertyChanged}" Width="215" />
+                                </Style>
+                            </GroupBox.Resources>
+                            <StackPanel Margin="0,2,0,0">
+                                <TextBlock Text="Tên máy in" />
+                                <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.PrinterName, UpdateSourceTrigger=PropertyChanged}" Width="215" />
 
-                            <TextBlock Text="Model máy in" />
-                            <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.ModelName, UpdateSourceTrigger=PropertyChanged}" Width="215" />
+                                <TextBlock Text="Model máy in" />
+                                <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.ModelName, UpdateSourceTrigger=PropertyChanged}" Width="215" />
 
-                            <TextBlock Text="IP máy in" />
-                            <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.IpAddress, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
+                                <TextBlock Text="IP máy in" />
+                                <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.IpAddress, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
 
-                            <TextBlock Text="Port" />
-                            <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.Port, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
+                                <TextBlock Text="Port" />
+                                <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.Port, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
 
-                            <TextBlock Text="License key (MAC)" />
-                            <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.LicenseKey, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
+                                <TextBlock Text="License key (MAC)" />
+                                <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.LicenseKey, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
 
-                            <TextBlock Text="Độ dài serial" />
-                            <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.SerialLength, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
+                                <TextBlock Text="Độ dài serial" />
+                                <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.SerialLength, UpdateSourceTrigger=PropertyChanged}" IsReadOnly="{Binding IsPrinting}" Width="215" />
 
-                            <TextBlock Text="Timeout kết nối ms" />
-                            <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" Width="215" />
+                                <TextBlock Text="Timeout kết nối ms" />
+                                <TextBox Style="{StaticResource CompactConfigTextBoxStyle}" Text="{Binding PrinterConfig.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" Width="215" />
 
-                            <StackPanel Orientation="Horizontal"
+                                <StackPanel Orientation="Horizontal"
                                         HorizontalAlignment="Center"
                                         Margin="0,8,0,0">
-                                <Button Content="Lưu"
+                                    <Button Content="Lưu"
                                         Command="{Binding SaveConfigCommand}"
                                         Style="{StaticResource CompactSuccessButtonStyle}"
                                         Width="90"
                                         Margin="0,0,8,0" Height="35" />
-                                <Button Content="Tải lại"
+                                    <Button Content="Tải lại"
                                         Command="{Binding ReloadConfigCommand}"
                                         Style="{StaticResource CompactNeutralButtonStyle}"
                                         Width="90"
                                         Margin="0,0,8,0" Height="35" />
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
                         </GroupBox>
                     </Grid>
 

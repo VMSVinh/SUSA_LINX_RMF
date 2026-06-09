@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Resource Include="LogoVMS.ico" />
+    <Resource Include="LOGO-VMS-VN.png" />
     <ProjectReference Include="D:\KHACH_HANG\SUNSTEEL\Source_Code\VmsDevice\VmsDevice\VmsDevice.csproj" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
   </ItemGroup>
