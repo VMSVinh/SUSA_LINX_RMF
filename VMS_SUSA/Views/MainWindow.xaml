@@ -400,6 +400,7 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
@@ -449,13 +450,70 @@
                             </Grid>
                         </Border>
 
-                        <DataGrid Grid.Row="1"
+                        <Border Grid.Row="1"
+                                Background="#FFF8FAFC"
+                                Padding="6,4"
+                                Margin="0,0,0,6"
+                                BorderBrush="{StaticResource BorderBrushSoft}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button Grid.Column="0"
+                                        Content="|&lt;"
+                                        Width="42"
+                                        Height="28"
+                                        Margin="0,0,6,0"
+                                        Command="{Binding FirstPageCommand}" />
+
+                                <Button Grid.Column="1"
+                                        Content="&lt;"
+                                        Width="42"
+                                        Height="28"
+                                        Margin="0,0,10,0"
+                                        Command="{Binding PreviousPageCommand}" />
+
+                                <TextBlock Grid.Column="2"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextBrush}"
+                                           Text="{Binding PageInfoText}" />
+
+                                <Button Grid.Column="3"
+                                        Content="&gt;"
+                                        Width="42"
+                                        Height="28"
+                                        Margin="10,0,6,0"
+                                        HorizontalAlignment="Right"
+                                        Command="{Binding NextPageCommand}" />
+
+                                <Button Grid.Column="4"
+                                        Content="&gt;|"
+                                        Width="42"
+                                        Height="28"
+                                        Command="{Binding LastPageCommand}" />
+                            </Grid>
+                        </Border>
+
+                        <DataGrid Grid.Row="2"
                                   ItemsSource="{Binding FilteredSerialItems}"
                                   AutoGenerateColumns="False"
                                   CanUserSortColumns="True"
                                   RowHeight="26"
                                   ColumnHeaderHeight="28"
-                                  FontSize="12">
+                                  FontSize="12"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="STT" Binding="{Binding Index}" Width="70" />
                                 <DataGridTextColumn Header="Serial" Binding="{Binding Serial}" Width="2*" />

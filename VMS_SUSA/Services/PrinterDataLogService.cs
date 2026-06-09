@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using VMS_SUSA.Models;
+using VMS_SUSA.Repositories;
 
 namespace VMS_SUSA.Services;
 
@@ -9,24 +10,15 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
 {
     private const int MaxRawLogLines = 1000;
 
-    private sealed class SerialResultsLog
-    {
-        public DateTime SavedAt { get; set; } = DateTime.Now;
-        public List<SerialItem> SerialItems { get; set; } = new();
-    }
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
-
     private readonly SemaphoreSlim _sync = new(1, 1);
+    private readonly ISerialItemRepository _serialItemRepository;
 
-    public PrinterDataLogService()
+    public PrinterDataLogService(ISerialItemRepository serialItemRepository)
     {
+        _serialItemRepository = serialItemRepository;
         DataLogsFolderPath = Path.Combine(AppContext.BaseDirectory, "Data Logs");
         Directory.CreateDirectory(DataLogsFolderPath);
-        SerialResultsFilePath = Path.Combine(DataLogsFolderPath, "serial_results.json");
+        SerialResultsFilePath = serialItemRepository.DatabasePath;
         RawPrinterLogFilePath = Path.Combine(DataLogsFolderPath, "printer_raw.log");
     }
 
@@ -38,17 +30,10 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
 
     public async Task SaveSerialItemsAsync(IEnumerable<SerialItem> items)
     {
-        var snapshot = new SerialResultsLog
-        {
-            SavedAt = DateTime.Now,
-            SerialItems = items?.Select(CloneSerialItem).ToList() ?? new List<SerialItem>()
-        };
-
         await _sync.WaitAsync().ConfigureAwait(false);
         try
         {
-            var json = JsonSerializer.Serialize(snapshot, JsonOptions);
-            await File.WriteAllTextAsync(SerialResultsFilePath, json, Encoding.UTF8).ConfigureAwait(false);
+            await _serialItemRepository.ReplaceAllAsync(items ?? Enumerable.Empty<SerialItem>()).ConfigureAwait(false);
         }
         finally
         {
@@ -58,29 +43,11 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
 
     public async Task<List<SerialItem>?> LoadSerialItemsAsync()
     {
-        if (!File.Exists(SerialResultsFilePath))
-        {
-            return null;
-        }
-
         await _sync.WaitAsync().ConfigureAwait(false);
         try
         {
-            var json = await File.ReadAllTextAsync(SerialResultsFilePath, Encoding.UTF8).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return null;
-            }
-
-            try
-            {
-                var snapshot = JsonSerializer.Deserialize<SerialResultsLog>(json, JsonOptions);
-                return snapshot?.SerialItems ?? new List<SerialItem>();
-            }
-            catch
-            {
-                return JsonSerializer.Deserialize<List<SerialItem>>(json, JsonOptions);
-            }
+            var items = await _serialItemRepository.GetAllAsync().ConfigureAwait(false);
+            return items.Count == 0 ? null : items;
         }
         catch
         {
@@ -121,18 +88,4 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
             _sync.Release();
         }
     }
-
-    private static SerialItem CloneSerialItem(SerialItem item)
-    {
-        return new SerialItem
-        {
-            Index = item.Index,
-            Serial = item.Serial,
-            Status = item.Status,
-            SentAt = item.SentAt,
-            PrintedAt = item.PrintedAt,
-            Note = item.Note
-        };
-    }
-
 }
