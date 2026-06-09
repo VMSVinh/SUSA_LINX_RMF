@@ -130,34 +130,34 @@
                                             HorizontalAlignment="Stretch" Background="#FF263656" />
 
                                     <Button Grid.Row="1" Grid.Column="0"
-                                            Content="Bắt đầu in"
-                                            Command="{Binding StartPrintCommand}"
+                                            Content="Nạp data đệm"
+                                            Command="{Binding Send30RemoteFieldsThenStartPrintCommand}"
                                             Style="{StaticResource PrimaryButtonStyle}"
                                             Margin="0,0,6,8"
                                             Height="40"
-                                            HorizontalAlignment="Stretch" />
+                                            HorizontalAlignment="Stretch" Background="#FFEB25A6" FontSize="13" />
                                     <Button Grid.Row="1" Grid.Column="1"
-                                            Content="Dừng in"
-                                            Command="{Binding StopPrintCommand}"
-                                            Style="{StaticResource DangerButtonStyle}"
+                                            Content="Xóa data đệm"
+                                            Command="{Binding ClearDataBufferCommand}"
+                                            Style="{StaticResource NeutralButtonStyle}"
                                             Margin="6,0,0,8"
                                             Height="40"
-                                            HorizontalAlignment="Stretch" />
+                                            HorizontalAlignment="Stretch" Background="#FF8F8F8F" FontSize="13" />
 
                                     <Button Grid.Row="2" Grid.Column="0"
-                                            Content="Khởi động"
-                                            Command="{Binding Send30RemoteFieldsThenStartPrintCommand}"
+                                            Content="Bắt đầu in"
+                                            Command="{Binding StartPrintCommand}"
                                             Style="{StaticResource PrimaryButtonStyle}"
                                             Margin="0,0,6,0"
                                             Height="40"
-                                            HorizontalAlignment="Stretch" Background="#FFEB25A6" />
+                                            HorizontalAlignment="Stretch" />
                                     <Button Grid.Row="2" Grid.Column="1"
-                                            Content="Xóa dữ liệu đệm"
-                                            Command="{Binding ClearDataBufferCommand}"
-                                            Style="{StaticResource NeutralButtonStyle}"
+                                            Content="Dừng in"
+                                            Command="{Binding StopPrintCommand}"
+                                            Style="{StaticResource DangerButtonStyle}"
                                             Margin="6,0,0,0"
                                             Height="40"
-                                            HorizontalAlignment="Stretch" Background="#FF8F8F8F" />
+                                            HorizontalAlignment="Stretch" />
                                 </Grid>
                             </Grid>
                         </GroupBox>

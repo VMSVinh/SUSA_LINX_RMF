@@ -428,6 +428,160 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
         }
     }
 
+    public async Task<int> CountSendableAfterIndexAsync(int displayIndexExclusive)
+    {
+        await _sync.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT COUNT(*)
+                FROM serial_items
+                WHERE display_index > @display_index
+                  AND status IN (@waiting, @sent);
+                """;
+            command.Parameters.AddWithValue("@display_index", displayIndexExclusive);
+            command.Parameters.AddWithValue("@waiting", (int)SerialStatus.Waiting);
+            command.Parameters.AddWithValue("@sent", (int)SerialStatus.Sent);
+            return Convert.ToInt32(await command.ExecuteScalarAsync().ConfigureAwait(false));
+        }
+        finally
+        {
+            _sync.Release();
+        }
+    }
+
+    public async Task<List<SerialItem>> GetSendableAfterIndexAsync(int displayIndexExclusive, int take)
+    {
+        if (take <= 0)
+        {
+            return new List<SerialItem>();
+        }
+
+        await _sync.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT display_index, serial, status, sent_at, printed_at, note
+                FROM serial_items
+                WHERE display_index > @display_index
+                  AND status IN (@waiting, @sent)
+                ORDER BY display_index ASC
+                LIMIT @take;
+                """;
+            command.Parameters.AddWithValue("@display_index", displayIndexExclusive);
+            command.Parameters.AddWithValue("@waiting", (int)SerialStatus.Waiting);
+            command.Parameters.AddWithValue("@sent", (int)SerialStatus.Sent);
+            command.Parameters.AddWithValue("@take", take);
+
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            var items = new List<SerialItem>();
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                items.Add(ReadSerialItem(reader));
+            }
+
+            return items;
+        }
+        finally
+        {
+            _sync.Release();
+        }
+    }
+
+    public async Task<string?> ReconcilePrintedItemsAsync(int printerCounter)
+    {
+        printerCounter = Math.Max(0, printerCounter);
+
+        await _sync.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync().ConfigureAwait(false);
+
+            await using var countCommand = connection.CreateCommand();
+            countCommand.CommandText = """
+                SELECT COUNT(*)
+                FROM serial_items
+                WHERE status IN (@waiting, @sent, @printed);
+                """;
+            countCommand.Parameters.AddWithValue("@waiting", (int)SerialStatus.Waiting);
+            countCommand.Parameters.AddWithValue("@sent", (int)SerialStatus.Sent);
+            countCommand.Parameters.AddWithValue("@printed", (int)SerialStatus.Printed);
+            var validCount = Convert.ToInt32(await countCommand.ExecuteScalarAsync().ConfigureAwait(false));
+
+            if (validCount == 0)
+            {
+                return null;
+            }
+
+            var targetPrintedCount = Math.Min(printerCounter, validCount);
+            var nowText = DateTime.Now.ToString("O");
+
+            string? lastPrintedSerial = null;
+            if (targetPrintedCount > 0)
+            {
+                await using var serialCommand = connection.CreateCommand();
+                serialCommand.CommandText = """
+                    WITH ranked AS (
+                        SELECT serial, ROW_NUMBER() OVER (ORDER BY display_index ASC) AS rn
+                        FROM serial_items
+                        WHERE status IN (@waiting, @sent, @printed)
+                    )
+                    SELECT serial
+                    FROM ranked
+                    WHERE rn = @target_rn
+                    LIMIT 1;
+                    """;
+                serialCommand.Parameters.AddWithValue("@waiting", (int)SerialStatus.Waiting);
+                serialCommand.Parameters.AddWithValue("@sent", (int)SerialStatus.Sent);
+                serialCommand.Parameters.AddWithValue("@printed", (int)SerialStatus.Printed);
+                serialCommand.Parameters.AddWithValue("@target_rn", targetPrintedCount);
+                lastPrintedSerial = Convert.ToString(await serialCommand.ExecuteScalarAsync().ConfigureAwait(false));
+            }
+
+            await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync().ConfigureAwait(false);
+
+            await using (var markPrintedCommand = connection.CreateCommand())
+            {
+                markPrintedCommand.Transaction = transaction;
+                markPrintedCommand.CommandText = """
+                    WITH ranked AS (
+                        SELECT id, ROW_NUMBER() OVER (ORDER BY display_index ASC) AS rn
+                        FROM serial_items
+                        WHERE status IN (@waiting, @sent, @printed)
+                    )
+                    UPDATE serial_items
+                    SET status = @printed_status,
+                        printed_at = COALESCE(printed_at, @now),
+                        sent_at = sent_at,
+                        note = '',
+                        updated_at = @now
+                    WHERE id IN (SELECT id FROM ranked WHERE rn <= @target_count);
+                    """;
+                markPrintedCommand.Parameters.AddWithValue("@waiting", (int)SerialStatus.Waiting);
+                markPrintedCommand.Parameters.AddWithValue("@sent", (int)SerialStatus.Sent);
+                markPrintedCommand.Parameters.AddWithValue("@printed", (int)SerialStatus.Printed);
+                markPrintedCommand.Parameters.AddWithValue("@printed_status", (int)SerialStatus.Printed);
+                markPrintedCommand.Parameters.AddWithValue("@now", nowText);
+                markPrintedCommand.Parameters.AddWithValue("@target_count", targetPrintedCount);
+                await markPrintedCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync().ConfigureAwait(false);
+            return lastPrintedSerial;
+        }
+        finally
+        {
+            _sync.Release();
+        }
+    }
+
     public async Task RecalculateDuplicateStatusesAsync(int serialLength)
     {
         serialLength = Math.Max(1, serialLength);

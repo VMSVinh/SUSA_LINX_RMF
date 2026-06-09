@@ -148,9 +148,9 @@ public sealed class MainViewModel : ViewModelBase
         PrinterStatus.IsPrinting = false;
         PrinterStatus.LastReceivedRawData = string.Empty;
         PrinterStatus.ReceivedRawDataLog = string.Empty;
-        OnPropertyChanged(nameof(PrintedCount));
 
         RefreshStatisticsFromRepository();
+        OnPropertyChanged(nameof(PrintedCount));
         if (TotalImportedCount > 0)
         {
             CurrentPage = 1;
@@ -385,7 +385,7 @@ public sealed class MainViewModel : ViewModelBase
 
     public bool CanStopPrint => IsConnected && IsPrinting;
 
-    public bool CanSend30RemoteFieldsThenStartPrint => IsConnected && WaitingCount >= 30;
+    public bool CanSend30RemoteFieldsThenStartPrint => IsConnected && ValidCount - PrinterStatus.PrinterCounter >= 30;
 
     public bool CanEditConfig => !IsPrinting && !IsConnected;
 
@@ -1006,12 +1006,12 @@ public sealed class MainViewModel : ViewModelBase
             UpdateDerivedState();
             await Task.Delay(300);
 
-            var persistedSoftwareCounter = PrinterStatus.SoftwareCounter;
             var connected = await _printerService.ConnectAsync(PrinterConfig);
             if (connected)
             {
-                await _printerService.SetSoftwareCounterAsync(persistedSoftwareCounter);
+                var persistedSoftwareCounter = PrinterStatus.SoftwareCounter;
                 await RefreshPrinterStatusAsync();
+                await _printerService.SetSoftwareCounterAsync(persistedSoftwareCounter);
                 PrinterStatus.IsConnected = true;
                 PrinterStatus.IsPrinting = false;
                 PrinterStatus.LastError = string.Empty;
@@ -1094,6 +1094,7 @@ public sealed class MainViewModel : ViewModelBase
             PrinterStatus.IsPrinting = true;
             PrinterStatus.LastError = string.Empty;
             PrinterStatus.LastUpdatedAt = DateTime.Now;
+            await RefreshPrinterStatusAsync();
         }
 
         UpdateDerivedState();
@@ -1111,6 +1112,7 @@ public sealed class MainViewModel : ViewModelBase
         {
             PrinterStatus.IsPrinting = false;
             PrinterStatus.LastUpdatedAt = DateTime.Now;
+            await RefreshPrinterStatusAsync();
         }
 
         UpdateDerivedState();
@@ -1121,13 +1123,25 @@ public sealed class MainViewModel : ViewModelBase
     {
         if (!IsConnected)
         {
-            MessageBox.Show("Chưa kết nối máy in.", "Gửi 30 rồi Start Print", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Chưa kết nối máy in.", "Khởi động", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (WaitingCount < 30)
+        await RefreshPrinterStatusAsync();
+
+        var startIndex = PrinterStatus.PrinterCounter > 0
+            ? PrinterStatus.PrinterCounter
+            : 0;
+        var availableCount = await _serialItemRepository.CountSendableAfterIndexAsync(startIndex);
+        if (availableCount < 30)
         {
-            MessageBox.Show("Cần tối thiểu 30 serial chờ để thực hiện thao tác này.", "Gửi 30 rồi Start Print", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(
+                availableCount <= 0
+                    ? "Không còn đủ dữ liệu để khởi động."
+                    : $"Chỉ còn {availableCount} serial hợp lệ sau counter hiện tại, chưa đủ 30.",
+                "Khởi động",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
@@ -1138,15 +1152,17 @@ public sealed class MainViewModel : ViewModelBase
 
         try
         {
-            var changed = false;
-            for (var i = 0; i < 30; i++)
+            var batch = await _serialItemRepository.GetSendableAfterIndexAsync(startIndex, 30);
+            if (batch.Count < 30)
             {
-                var nextItem = await _serialItemRepository.GetFirstByStatusAsync(SerialStatus.Waiting);
-                if (nextItem is null)
-                {
-                    MessageBox.Show("Đã hết dữ liệu trước khi gửi đủ 30 serial.", "Gửi 30 rồi Start Print", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+                MessageBox.Show("Dữ liệu sau counter hiện tại không đủ 30 serial để khởi động.", "Khởi động", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var changed = false;
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var nextItem = batch[i];
 
                 var ok = await _printerService.Send1RemoteFieldDataAsync(nextItem.Serial);
                 if (!ok)
@@ -1189,9 +1205,6 @@ public sealed class MainViewModel : ViewModelBase
                 UpdateDerivedState();
                 await SaveStateAsync();
             }
-
-            await Task.Delay(30);
-            await StartPrintAsync();
         }
         finally
         {
@@ -1213,7 +1226,18 @@ public sealed class MainViewModel : ViewModelBase
                 return;
             }
 
+            PrinterStatus.PrinterCounter += 1;
+            _appStatePrinterCounter = PrinterStatus.PrinterCounter;
+
             await MarkMostRecentPrintedAsync();
+
+            if (ShouldStopPrintNow)
+            {
+                await FinalizeRemainingSentItemsAsync();
+                await StopPrintAsync();
+                return;
+            }
+
             await SendNextRemoteFieldDataAsync("Nhận trigger 1B-0F", showNoDataMessage: false);
         }
         catch (Exception ex)
@@ -1251,47 +1275,11 @@ public sealed class MainViewModel : ViewModelBase
 
     private async Task SyncPrintedItemsToPrinterCounterAsync()
     {
-        var targetPrintedCount = Math.Min(PrinterStatus.PrinterCounter, ValidCount);
-        var printedCount = _serialStatistics.PrintedCount;
-        if (targetPrintedCount <= printedCount)
-        {
-            return;
-        }
-
-        var toPrintCount = targetPrintedCount - printedCount;
-        if (toPrintCount <= 0)
-        {
-            return;
-        }
-
-        var now = DateTime.Now;
-        var changed = false;
-
-        for (var i = 0; i < toPrintCount; i++)
-        {
-            var item = await _serialItemRepository.GetFirstByStatusAsync(SerialStatus.Sent);
-            if (item is null)
-            {
-                break;
-            }
-
-            var previousStatus = item.Status;
-            item.Status = SerialStatus.Printed;
-            item.PrintedAt = now;
-            item.Note = string.Empty;
-            PrinterStatus.LastPrintedSerial = item.Serial;
-            PrinterStatus.LastUpdatedAt = now;
-            await _serialItemRepository.UpdateAsync(item);
-            AdjustStatisticsForStatusChange(previousStatus, item.Status);
-            changed = true;
-        }
-
-        if (changed)
-        {
-            LoadCurrentPageFromRepository();
-            UpdateDerivedState();
-            await SaveStateAsync();
-        }
+        var lastPrintedSerial = await _serialItemRepository.ReconcilePrintedItemsAsync(PrinterStatus.PrinterCounter);
+        PrinterStatus.LastPrintedSerial = lastPrintedSerial ?? string.Empty;
+        SetStatisticsSnapshot(await _serialItemRepository.GetStatisticsAsync());
+        LoadCurrentPageFromRepository();
+        UpdateDerivedState();
     }
 
     private async Task FinalizeRemainingSentItemsAsync()
@@ -1348,12 +1336,6 @@ public sealed class MainViewModel : ViewModelBase
             }
 
             await SyncPrintedItemsToPrinterCounterAsync();
-
-            if (ShouldStopPrintNow)
-            {
-                await FinalizeRemainingSentItemsAsync();
-                await StopPrintAsync();
-            }
 
             return;
         }

@@ -16,6 +16,9 @@ public interface ISerialItemRepository
     Task<SerialItem?> GetFirstByStatusAsync(SerialStatus status);
     Task<SerialItem?> GetLastByStatusAsync(SerialStatus status);
     Task<List<SerialItem>> GetByStatusesAsync(IEnumerable<SerialStatus> statuses);
+    Task<int> CountSendableAfterIndexAsync(int displayIndexExclusive);
+    Task<List<SerialItem>> GetSendableAfterIndexAsync(int displayIndexExclusive, int take);
+    Task<string?> ReconcilePrintedItemsAsync(int printerCounter);
     Task RecalculateDuplicateStatusesAsync(int serialLength);
     Task UpdateAsync(SerialItem item);
     Task UpdateRangeAsync(IEnumerable<SerialItem> items);
