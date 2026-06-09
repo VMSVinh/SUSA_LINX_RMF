@@ -385,8 +385,6 @@ public sealed class MainViewModel : ViewModelBase
 
     public bool CanStopPrint => IsConnected && IsPrinting;
 
-    public bool CanSendBuffer => IsConnected && WaitingCount > 0;
-
     public bool CanSend30RemoteFieldsThenStartPrint => IsConnected && WaitingCount >= 30;
 
     public bool CanEditConfig => !IsPrinting && !IsConnected;
@@ -492,9 +490,8 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanDisconnect));
         OnPropertyChanged(nameof(CanStartPrint));
         OnPropertyChanged(nameof(CanStopPrint));
-        OnPropertyChanged(nameof(CanSendBuffer));
-        OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
         OnPropertyChanged(nameof(ClearDataBufferCommand));
+        OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(LastStateSavedText));
         UpdateCommandStates();
@@ -686,9 +683,7 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanDisconnect));
         OnPropertyChanged(nameof(CanStartPrint));
         OnPropertyChanged(nameof(CanStopPrint));
-        OnPropertyChanged(nameof(CanSendBuffer));
         OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
-        OnPropertyChanged(nameof(ClearDataBufferCommand));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(ConnectionStatusText));
         OnPropertyChanged(nameof(PrintStatusText));
@@ -748,9 +743,8 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanDisconnect));
         OnPropertyChanged(nameof(CanStartPrint));
         OnPropertyChanged(nameof(CanStopPrint));
-        OnPropertyChanged(nameof(CanSendBuffer));
-        OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
         OnPropertyChanged(nameof(ClearDataBufferCommand));
+        OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(CanGoPreviousPage));
         OnPropertyChanged(nameof(CanGoNextPage));
@@ -879,7 +873,6 @@ public sealed class MainViewModel : ViewModelBase
             LoadCurrentPageFromRepository();
             await _printerService.ResetSoftwareCounterAsync();
             PrinterStatus.SoftwareCounter = 0;
-            PrinterStatus.BufferCount = 0;
             PrinterStatus.LastSentSerial = string.Empty;
             PrinterStatus.LastPrintedSerial = string.Empty;
             PrinterStatus.LastError = string.Empty;
@@ -903,7 +896,6 @@ public sealed class MainViewModel : ViewModelBase
         SetStatisticsSnapshot(new SerialItemStatistics(0, 0, 0, 0, 0, 0, 0));
         LoadCurrentPageFromRepository();
         PrinterStatus.SoftwareCounter = 0;
-        PrinterStatus.BufferCount = 0;
         PrinterStatus.LastSentSerial = string.Empty;
         PrinterStatus.LastPrintedSerial = string.Empty;
         PrinterStatus.LastError = string.Empty;
@@ -1065,6 +1057,31 @@ public sealed class MainViewModel : ViewModelBase
         await SaveStateAsync();
     }
 
+    private async Task ClearDataBufferAsync()
+    {
+        if (!IsConnected)
+        {
+            MessageBox.Show("Chưa kết nối máy in.", "Xóa dữ liệu đệm", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (await _printerService.ClearDataBufferAsync())
+        {
+            PrinterStatus.LastError = string.Empty;
+            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            UpdateDerivedState();
+            await SaveStateAsync();
+            return;
+        }
+
+        PrinterStatus.LastError = string.IsNullOrWhiteSpace(_printerService.LastError)
+            ? "Xóa dữ liệu đệm thất bại"
+            : _printerService.LastError;
+        PrinterStatus.LastUpdatedAt = DateTime.Now;
+        UpdateDerivedState();
+        await SaveStateAsync();
+    }
+
     private async Task StartPrintAsync()
     {
         if (!IsConnected)
@@ -1180,32 +1197,6 @@ public sealed class MainViewModel : ViewModelBase
         {
             _bulkSendLock.Release();
         }
-    }
-
-    private async Task ClearDataBufferAsync()
-    {
-        if (!IsConnected)
-        {
-            MessageBox.Show("Chưa kết nối máy in.", "Xóa dữ liệu đệm", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        if (await _printerService.ClearDataBufferAsync())
-        {
-            PrinterStatus.BufferCount = 0;
-            PrinterStatus.LastError = string.Empty;
-            PrinterStatus.LastUpdatedAt = DateTime.Now;
-            UpdateDerivedState();
-            await SaveStateAsync();
-            return;
-        }
-
-        PrinterStatus.LastError = string.IsNullOrWhiteSpace(_printerService.LastError)
-            ? "Xóa dữ liệu đệm thất bại"
-            : _printerService.LastError;
-        PrinterStatus.LastUpdatedAt = DateTime.Now;
-        UpdateDerivedState();
-        await SaveStateAsync();
     }
 
     private async Task HandlePrinterTriggerAsync(string rawData)
@@ -1421,7 +1412,6 @@ public sealed class MainViewModel : ViewModelBase
             var previousConnected = PrinterStatus.IsConnected;
             var previousPrinting = PrinterStatus.IsPrinting;
             var previousSoftwareCounter = PrinterStatus.SoftwareCounter;
-            var previousBufferCount = PrinterStatus.BufferCount;
             var previousLastSentSerial = PrinterStatus.LastSentSerial;
             var previousLastPrintedSerial = PrinterStatus.LastPrintedSerial;
             var previousLastReceivedRawData = PrinterStatus.LastReceivedRawData;
@@ -1434,7 +1424,6 @@ public sealed class MainViewModel : ViewModelBase
             PrinterStatus.PrinterCounter = status.PrinterCounter;
             _appStatePrinterCounter = status.PrinterCounter;
             PrinterStatus.SoftwareCounter = status.SoftwareCounter;
-            PrinterStatus.BufferCount = status.BufferCount;
             PrinterStatus.LastSentSerial = status.LastSentSerial;
             PrinterStatus.LastPrintedSerial = status.LastPrintedSerial;
             PrinterStatus.LastReceivedRawData = status.LastReceivedRawData;
@@ -1448,7 +1437,6 @@ public sealed class MainViewModel : ViewModelBase
                 previousConnected != status.IsConnected ||
                 previousPrinting != status.IsPrinting ||
                 previousSoftwareCounter != status.SoftwareCounter ||
-                previousBufferCount != status.BufferCount ||
                 !string.Equals(previousLastSentSerial, status.LastSentSerial, StringComparison.Ordinal) ||
                 !string.Equals(previousLastPrintedSerial, status.LastPrintedSerial, StringComparison.Ordinal) ||
                 !string.Equals(previousLastReceivedRawData, status.LastReceivedRawData, StringComparison.Ordinal) ||
@@ -1506,7 +1494,6 @@ public sealed class MainViewModel : ViewModelBase
                 IsPrinting = PrinterStatus.IsPrinting,
                 PrinterCounter = printerCounterToPersist,
                 SoftwareCounter = PrinterStatus.SoftwareCounter,
-                BufferCount = PrinterStatus.BufferCount,
                 LastSentSerial = PrinterStatus.LastSentSerial,
                 LastPrintedSerial = PrinterStatus.LastPrintedSerial,
                 LastError = PrinterStatus.LastError,

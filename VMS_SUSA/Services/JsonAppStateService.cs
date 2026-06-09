@@ -31,7 +31,6 @@ public sealed class JsonAppStateService : IAppStateService
                 IsPrinting = state.PrinterStatus?.IsPrinting ?? false,
                 PrinterCounter = state.PrinterStatus?.PrinterCounter ?? 0,
                 SoftwareCounter = state.PrinterStatus?.SoftwareCounter ?? 0,
-                BufferCount = state.PrinterStatus?.BufferCount ?? 0,
                 LastSentSerial = state.PrinterStatus?.LastSentSerial ?? string.Empty,
                 LastPrintedSerial = state.PrinterStatus?.LastPrintedSerial ?? string.Empty,
                 LastError = state.PrinterStatus?.LastError ?? string.Empty,

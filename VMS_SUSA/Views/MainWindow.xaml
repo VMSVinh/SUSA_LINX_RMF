@@ -247,10 +247,6 @@
                                 <Run Text="Số dữ liệu đã gửi: " />
                                 <Run Text="{Binding PrinterStatus.SoftwareCounter, Mode=OneWay}" FontWeight="Bold" />
                             </TextBlock>
-                            <TextBlock Margin="0,0,0,8" FontSize="13">
-                                <Run Text="Số dữ liệu trong buffer: " />
-                                <Run Text="{Binding PrinterStatus.BufferCount, Mode=OneWay}" FontWeight="Bold" />
-                            </TextBlock>
                             <TextBlock Margin="0,0,0,8" FontSize="13" TextWrapping="Wrap">
                                 <Run Text="Serial vừa gửi: " />
                                 <Run Text="{Binding PrinterStatus.LastSentSerial, Mode=OneWay}" FontWeight="Bold" />
