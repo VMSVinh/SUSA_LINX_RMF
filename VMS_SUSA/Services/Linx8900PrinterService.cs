@@ -283,6 +283,12 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
         }
 
         AppendRawLog("1B-02-1D-00-00-1B-03");
+
+        lock (_queueSync)
+        {
+            _serialQueue.Clear();
+        }
+
         _status.BufferCount = 0;
         _status.LastError = string.Empty;
         _status.LastUpdatedAt = DateTime.Now;
