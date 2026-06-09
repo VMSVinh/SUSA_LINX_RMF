@@ -789,9 +789,11 @@ public sealed class MainViewModel : ViewModelBase
             }
             else
             {
-                PrinterStatus.LastError = string.IsNullOrWhiteSpace(_printerService.LastError)
+                var connectionError = string.IsNullOrWhiteSpace(_printerService.LastError)
                     ? "Mất kết nối"
                     : _printerService.LastError;
+                PrinterStatus.LastError = connectionError;
+                MessageBox.Show(connectionError, GetConnectionErrorTitle(connectionError), MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
         finally
@@ -800,6 +802,17 @@ public sealed class MainViewModel : ViewModelBase
             UpdateDerivedState();
             await SaveStateAsync();
         }
+    }
+
+    private static string GetConnectionErrorTitle(string errorMessage)
+    {
+        if (errorMessage.Contains("License key", StringComparison.OrdinalIgnoreCase)
+            || errorMessage.Contains("MAC", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Lỗi license";
+        }
+
+        return "Lỗi kết nối TCP/IP";
     }
 
     private async Task DisconnectPrinterAsync()

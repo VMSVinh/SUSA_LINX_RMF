@@ -127,7 +127,7 @@
                                             Style="{StaticResource NeutralButtonStyle}"
                                             Margin="6,0,0,8"
                                             Height="40"
-                                            HorizontalAlignment="Stretch" />
+                                            HorizontalAlignment="Stretch" Background="#FF263656" />
 
                                     <Button Grid.Row="1" Grid.Column="0"
                                             Content="Bắt đầu in"
@@ -150,14 +150,14 @@
                                             Style="{StaticResource PrimaryButtonStyle}"
                                             Margin="0,0,6,0"
                                             Height="40"
-                                            HorizontalAlignment="Stretch" />
+                                            HorizontalAlignment="Stretch" Background="#FFEB25A6" />
                                     <Button Grid.Row="2" Grid.Column="1"
                                             Content="Xóa dữ liệu đệm"
                                             Command="{Binding ClearDataBufferCommand}"
                                             Style="{StaticResource NeutralButtonStyle}"
                                             Margin="6,0,0,0"
                                             Height="40"
-                                            HorizontalAlignment="Stretch" />
+                                            HorizontalAlignment="Stretch" Background="#FF8F8F8F" />
                                 </Grid>
                             </Grid>
                         </GroupBox>
@@ -236,12 +236,27 @@
                     <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
                         <StackPanel>
                             <TextBlock Text="Giám sát vận hành" FontWeight="Bold" FontSize="16" Margin="0,0,0,10" />
-                            <TextBlock Text="{Binding PrintedCount, StringFormat=Counter máy in: {0}}" Margin="0,0,0,6" />
-                            <TextBlock Text="{Binding PrinterStatus.SoftwareCounter, StringFormat=Số dữ liệu đã gửi: {0}}" Margin="0,0,0,6" />
-                            <TextBlock Text="{Binding PrinterStatus.BufferCount, StringFormat=Số dữ liệu trong buffer: {0}}" Margin="0,0,0,6" />
-                            <TextBlock Text="{Binding PrinterStatus.LastSentSerial, StringFormat=Serial vừa gửi: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                            <TextBlock Text="{Binding PrinterStatus.LastPrintedSerial, StringFormat=Serial đã in gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                            <TextBlock Text="Log dữ liệu máy in trả về:" FontWeight="SemiBold" Margin="0,4,0,2" />
+                            <TextBlock Margin="0,0,0,8" FontSize="13">
+                                <Run Text="Counter máy in: " />
+                                <Run Text="{Binding PrintedCount, Mode=OneWay}" FontWeight="Bold" />
+                            </TextBlock>
+                            <TextBlock Margin="0,0,0,8" FontSize="13">
+                                <Run Text="Số dữ liệu đã gửi: " />
+                                <Run Text="{Binding PrinterStatus.SoftwareCounter, Mode=OneWay}" FontWeight="Bold" />
+                            </TextBlock>
+                            <TextBlock Margin="0,0,0,8" FontSize="13">
+                                <Run Text="Số dữ liệu trong buffer: " />
+                                <Run Text="{Binding PrinterStatus.BufferCount, Mode=OneWay}" FontWeight="Bold" />
+                            </TextBlock>
+                            <TextBlock Margin="0,0,0,8" FontSize="13" TextWrapping="Wrap">
+                                <Run Text="Serial vừa gửi: " />
+                                <Run Text="{Binding PrinterStatus.LastSentSerial, Mode=OneWay}" FontWeight="Bold" />
+                            </TextBlock>
+                            <TextBlock Margin="0,0,0,8" FontSize="13" TextWrapping="Wrap">
+                                <Run Text="Serial đã in gần nhất: " />
+                                <Run Text="{Binding PrinterStatus.LastPrintedSerial, Mode=OneWay}" FontWeight="Bold" />
+                            </TextBlock>
+                            <TextBlock Text="Log dữ liệu máy in trả về:" FontWeight="SemiBold" FontSize="13" Margin="0,4,0,2" />
                             <TextBox Text="{Binding PrinterStatus.ReceivedRawDataLog}"
                                      IsReadOnly="True"
                                      TextWrapping="NoWrap"
@@ -250,7 +265,10 @@
                                      VerticalScrollBarVisibility="Disabled"
                                      HorizontalScrollBarVisibility="Auto"
                                      Margin="0,0,0,6" />
-                            <TextBlock Text="{Binding PrinterStatus.LastError, StringFormat=Lỗi gần nhất: {0}}" TextWrapping="Wrap" Margin="0,0,0,6" Foreground="DarkRed" />
+                            <TextBlock Margin="0,0,0,6" FontSize="13" Foreground="DarkRed" TextWrapping="Wrap">
+                                <Run Text="Lỗi gần nhất: " />
+                                <Run Text="{Binding PrinterStatus.LastError, Mode=OneWay}" FontWeight="Bold" />
+                            </TextBlock>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -262,7 +280,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <GroupBox Grid.Row="0" Header="Dữ liệu serial" Margin="0,0,0,8" Padding="6">
+                <GroupBox Grid.Row="0" Header="Dữ liệu Import" Margin="0,0,0,8" Padding="6" FontWeight="Bold" FontSize="15">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
