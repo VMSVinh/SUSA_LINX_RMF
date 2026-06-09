@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using System.IO;
+using System.Text;
 using VMS_SUSA.Models;
 
 namespace VMS_SUSA.Repositories;
@@ -8,6 +9,7 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
 {
     private const int SchemaVersion = 1;
     private const string DatabaseFileName = "printer_data.db";
+    private const int InsertBatchSize = 100;
 
     private readonly SemaphoreSlim _sync = new(1, 1);
 
@@ -88,7 +90,7 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
         }
     }
 
-    public async Task ReplaceAllAsync(IEnumerable<SerialItem> items)
+    public async Task ReplaceAllAsync(IEnumerable<SerialItem> items, IProgress<int>? progress = null)
     {
         await _sync.WaitAsync().ConfigureAwait(false);
         try
@@ -104,77 +106,25 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
                 await deleteCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
 
-            await using var insertCommand = connection.CreateCommand();
-            insertCommand.Transaction = transaction;
-            insertCommand.CommandText = """
-                INSERT INTO serial_items (
-                    display_index,
-                    serial,
-                    status,
-                    sent_at,
-                    printed_at,
-                    note,
-                    created_at,
-                    updated_at
-                )
-                VALUES (
-                    @display_index,
-                    @serial,
-                    @status,
-                    @sent_at,
-                    @printed_at,
-                    @note,
-                    @created_at,
-                    @updated_at
-                );
-                """;
-
-            var displayIndex = insertCommand.CreateParameter();
-            displayIndex.ParameterName = "@display_index";
-            insertCommand.Parameters.Add(displayIndex);
-
-            var serial = insertCommand.CreateParameter();
-            serial.ParameterName = "@serial";
-            insertCommand.Parameters.Add(serial);
-
-            var status = insertCommand.CreateParameter();
-            status.ParameterName = "@status";
-            insertCommand.Parameters.Add(status);
-
-            var sentAt = insertCommand.CreateParameter();
-            sentAt.ParameterName = "@sent_at";
-            insertCommand.Parameters.Add(sentAt);
-
-            var printedAt = insertCommand.CreateParameter();
-            printedAt.ParameterName = "@printed_at";
-            insertCommand.Parameters.Add(printedAt);
-
-            var note = insertCommand.CreateParameter();
-            note.ParameterName = "@note";
-            insertCommand.Parameters.Add(note);
-
-            var createdAt = insertCommand.CreateParameter();
-            createdAt.ParameterName = "@created_at";
-            insertCommand.Parameters.Add(createdAt);
-
-            var updatedAt = insertCommand.CreateParameter();
-            updatedAt.ParameterName = "@updated_at";
-            insertCommand.Parameters.Add(updatedAt);
-
-            insertCommand.Prepare();
-
-            var now = DateTime.Now;
+            var batch = new List<SerialItem>(InsertBatchSize);
+            var insertedCount = 0;
             foreach (var item in items)
             {
-                displayIndex.Value = item.Index;
-                serial.Value = item.Serial ?? string.Empty;
-                status.Value = (int)item.Status;
-                sentAt.Value = ToDbValue(item.SentAt);
-                printedAt.Value = ToDbValue(item.PrintedAt);
-                note.Value = item.Note ?? string.Empty;
-                createdAt.Value = now.ToString("O");
-                updatedAt.Value = now.ToString("O");
-                await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+                batch.Add(item);
+                if (batch.Count >= InsertBatchSize)
+                {
+                    insertedCount += batch.Count;
+                    await InsertBatchAsync(connection, transaction, batch).ConfigureAwait(false);
+                    progress?.Report(insertedCount);
+                    batch.Clear();
+                }
+            }
+
+            if (batch.Count > 0)
+            {
+                insertedCount += batch.Count;
+                await InsertBatchAsync(connection, transaction, batch).ConfigureAwait(false);
+                progress?.Report(insertedCount);
             }
 
             await transaction.CommitAsync().ConfigureAwait(false);
@@ -478,6 +428,73 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
         }
     }
 
+    public async Task RecalculateDuplicateStatusesAsync(int serialLength)
+    {
+        serialLength = Math.Max(1, serialLength);
+
+        await _sync.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync().ConfigureAwait(false);
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+                WITH ranked AS (
+                    SELECT
+                        id,
+                        status,
+                        note,
+                        CASE WHEN LENGTH(TRIM(serial)) = @serial_length THEN 1 ELSE 0 END AS is_valid_length,
+                        ROW_NUMBER() OVER (PARTITION BY TRIM(serial) ORDER BY display_index ASC) AS rn
+                    FROM serial_items
+                    WHERE status NOT IN (@error_status, @invalid_status)
+                ),
+                computed AS (
+                    SELECT
+                        id,
+                        CASE
+                            WHEN is_valid_length = 0 THEN @invalid_status
+                            WHEN rn > 1 THEN @duplicate_status
+                            WHEN status = @duplicate_status THEN @waiting_status
+                            ELSE status
+                        END AS new_status,
+                        CASE
+                            WHEN is_valid_length = 0 THEN @invalid_note
+                            WHEN rn > 1 THEN @duplicate_note
+                            WHEN status = @duplicate_status THEN ''
+                            ELSE note
+                        END AS new_note
+                    FROM ranked
+                )
+                UPDATE serial_items
+                SET
+                    status = (SELECT new_status FROM computed WHERE computed.id = serial_items.id),
+                    note = (SELECT new_note FROM computed WHERE computed.id = serial_items.id),
+                    updated_at = datetime('now')
+                WHERE id IN (SELECT id FROM computed)
+                  AND (
+                    status <> (SELECT new_status FROM computed WHERE computed.id = serial_items.id)
+                    OR COALESCE(note, '') <> COALESCE((SELECT new_note FROM computed WHERE computed.id = serial_items.id), '')
+                  );
+                """;
+            command.Parameters.AddWithValue("@serial_length", serialLength);
+            command.Parameters.AddWithValue("@error_status", (int)SerialStatus.Error);
+            command.Parameters.AddWithValue("@invalid_status", (int)SerialStatus.Invalid);
+            command.Parameters.AddWithValue("@duplicate_status", (int)SerialStatus.Duplicate);
+            command.Parameters.AddWithValue("@waiting_status", (int)SerialStatus.Waiting);
+            command.Parameters.AddWithValue("@invalid_note", "Sai độ dài");
+            command.Parameters.AddWithValue("@duplicate_note", "Serial trùng");
+            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await transaction.CommitAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _sync.Release();
+        }
+    }
+
     public async Task UpdateAsync(SerialItem item)
     {
         await _sync.WaitAsync().ConfigureAwait(false);
@@ -699,5 +716,51 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
     private static object ToDbValue(DateTime? value)
     {
         return value.HasValue ? value.Value.ToString("O") : DBNull.Value;
+    }
+
+    private static async Task InsertBatchAsync(SqliteConnection connection, SqliteTransaction transaction, IReadOnlyList<SerialItem> batch)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
+        var sql = new StringBuilder();
+        sql.Append("""
+            INSERT INTO serial_items (
+                display_index,
+                serial,
+                status,
+                sent_at,
+                printed_at,
+                note,
+                created_at,
+                updated_at
+            )
+            VALUES
+            """);
+
+        var nowText = DateTime.Now.ToString("O");
+        for (var i = 0; i < batch.Count; i++)
+        {
+            if (i > 0)
+            {
+                sql.AppendLine(",");
+            }
+
+            sql.AppendLine($"(@display_index{i}, @serial{i}, @status{i}, @sent_at{i}, @printed_at{i}, @note{i}, @created_at{i}, @updated_at{i})");
+
+            var item = batch[i];
+            command.Parameters.AddWithValue($"@display_index{i}", item.Index);
+            command.Parameters.AddWithValue($"@serial{i}", item.Serial ?? string.Empty);
+            command.Parameters.AddWithValue($"@status{i}", (int)item.Status);
+            command.Parameters.AddWithValue($"@sent_at{i}", ToDbValue(item.SentAt));
+            command.Parameters.AddWithValue($"@printed_at{i}", ToDbValue(item.PrintedAt));
+            command.Parameters.AddWithValue($"@note{i}", item.Note ?? string.Empty);
+            command.Parameters.AddWithValue($"@created_at{i}", nowText);
+            command.Parameters.AddWithValue($"@updated_at{i}", nowText);
+        }
+
+        sql.Append(';');
+        command.CommandText = sql.ToString();
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 }

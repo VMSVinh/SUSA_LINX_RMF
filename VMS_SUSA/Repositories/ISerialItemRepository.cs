@@ -7,7 +7,7 @@ public interface ISerialItemRepository
     string DatabasePath { get; }
 
     Task InitializeAsync();
-    Task ReplaceAllAsync(IEnumerable<SerialItem> items);
+    Task ReplaceAllAsync(IEnumerable<SerialItem> items, IProgress<int>? progress = null);
     Task<List<SerialItem>> GetAllAsync();
     IAsyncEnumerable<SerialItem> StreamAllAsync();
     IAsyncEnumerable<SerialItem> StreamByStatusesAsync(IEnumerable<SerialStatus> statuses);
@@ -16,6 +16,7 @@ public interface ISerialItemRepository
     Task<SerialItem?> GetFirstByStatusAsync(SerialStatus status);
     Task<SerialItem?> GetLastByStatusAsync(SerialStatus status);
     Task<List<SerialItem>> GetByStatusesAsync(IEnumerable<SerialStatus> statuses);
+    Task RecalculateDuplicateStatusesAsync(int serialLength);
     Task UpdateAsync(SerialItem item);
     Task UpdateRangeAsync(IEnumerable<SerialItem> items);
     Task DeleteAllAsync();

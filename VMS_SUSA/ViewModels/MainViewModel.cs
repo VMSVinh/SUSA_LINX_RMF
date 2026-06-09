@@ -45,8 +45,10 @@ public sealed class MainViewModel : ViewModelBase
     private SerialItemStatistics _serialStatistics = new(0, 0, 0, 0, 0, 0, 0);
     private int _appStatePrinterCounter;
     private bool _isConnecting;
+    private bool _isBusyOperation;
     private bool _isInitialized;
     private bool _isRefreshingStatus;
+    private string _operationStatusText = "Sẵn sàng xử lý";
     private readonly SemaphoreSlim _remoteFieldSendLock = new(1, 1);
     private readonly SemaphoreSlim _bulkSendLock = new(1, 1);
 
@@ -70,11 +72,11 @@ public sealed class MainViewModel : ViewModelBase
             new() { DisplayName = "Sai định dạng", Value = SerialStatus.Invalid }
         };
 
-        BrowseImportFileCommand = new AsyncRelayCommand(BrowseImportFileAsync);
-        ImportSerialFileCommand = new AsyncRelayCommand(ImportSerialFileAsync, () => !string.IsNullOrWhiteSpace(ImportFilePath));
-        ClearSerialDataCommand = new AsyncRelayCommand(ClearSerialDataAsync, () => TotalImportedCount > 0);
-        CheckDuplicateCommand = new AsyncRelayCommand(CheckDuplicateAsync);
-        ExportErrorDataCommand = new AsyncRelayCommand(ExportErrorDataAsync, () => TotalImportedCount > 0);
+        BrowseImportFileCommand = new AsyncRelayCommand(BrowseImportFileAsync, () => !IsBusyOperation);
+        ImportSerialFileCommand = new AsyncRelayCommand(ImportSerialFileAsync, () => !IsBusyOperation && !string.IsNullOrWhiteSpace(ImportFilePath));
+        ClearSerialDataCommand = new AsyncRelayCommand(ClearSerialDataAsync, () => TotalImportedCount > 0 && !IsBusyOperation);
+        CheckDuplicateCommand = new AsyncRelayCommand(CheckDuplicateAsync, () => TotalImportedCount > 0 && !IsBusyOperation);
+        ExportErrorDataCommand = new AsyncRelayCommand(ExportErrorDataAsync, () => TotalImportedCount > 0 && !IsBusyOperation);
 
         SaveConfigCommand = new AsyncRelayCommand(SaveConfigAsync);
         ReloadConfigCommand = new AsyncRelayCommand(ReloadConfigAsync);
@@ -124,6 +126,7 @@ public sealed class MainViewModel : ViewModelBase
         _clockTimer.Tick += ClockTimer_Tick;
 
         UpdateCurrentTime();
+        UpdatePollingInterval();
         UpdateDerivedState();
         RefreshFilteredSerialItems();
     }
@@ -242,6 +245,24 @@ public sealed class MainViewModel : ViewModelBase
     {
         get => _statusFilterOptions;
         set => SetProperty(ref _statusFilterOptions, value);
+    }
+
+    public bool IsBusyOperation
+    {
+        get => _isBusyOperation;
+        private set
+        {
+            if (SetProperty(ref _isBusyOperation, value))
+            {
+                UpdateCommandStates();
+            }
+        }
+    }
+
+    public string OperationStatusText
+    {
+        get => _operationStatusText;
+        private set => SetProperty(ref _operationStatusText, value);
     }
 
     public string ImportFilePath
@@ -461,6 +482,7 @@ public sealed class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(IsPrinting));
+        OnPropertyChanged(nameof(PrintedCount));
         OnPropertyChanged(nameof(ConnectionStatusText));
         OnPropertyChanged(nameof(PrintStatusText));
         OnPropertyChanged(nameof(ConnectionStatusBrush));
@@ -520,10 +542,38 @@ public sealed class MainViewModel : ViewModelBase
         CurrentTimeText = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
     }
 
+    private void SetOperationStatus(string text, bool isBusy = true)
+    {
+        OperationStatusText = text;
+        IsBusyOperation = isBusy;
+    }
+
+    private void EndOperation(string? finalText = null)
+    {
+        if (!string.IsNullOrWhiteSpace(finalText))
+        {
+            OperationStatusText = finalText;
+        }
+
+        IsBusyOperation = false;
+    }
+
     private void RefreshStatisticsFromRepository()
     {
         _serialStatistics = _serialItemRepository.GetStatisticsAsync().GetAwaiter().GetResult();
         TotalImportedCount = _serialStatistics.TotalCount;
+    }
+
+    private void UpdatePollingInterval()
+    {
+        var interval = IsConnected && IsPrinting
+            ? TimeSpan.FromMilliseconds(300)
+            : TimeSpan.FromSeconds(1);
+
+        if (_clockTimer.Interval != interval)
+        {
+            _clockTimer.Interval = interval;
+        }
     }
 
     private void SetStatisticsSnapshot(SerialItemStatistics statistics)
@@ -620,6 +670,7 @@ public sealed class MainViewModel : ViewModelBase
 
     private void UpdateDerivedState()
     {
+        UpdatePollingInterval();
         OnPropertyChanged(nameof(IsConnecting));
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(IsPrinting));
@@ -764,70 +815,84 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
+        SetOperationStatus("Đang import dữ liệu...", true);
+
         var serialLength = Math.Max(1, PrinterConfig.SerialLength);
         var validSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var totalLines = 0;
         var importedCount = 0;
-        var waitingCount = 0;
-        var duplicateCount = 0;
-        var invalidCount = 0;
-
-        IEnumerable<SerialItem> EnumerateImportedItems()
+        var progress = new Progress<int>(count =>
         {
-            foreach (var rawLine in File.ReadLines(ImportFilePath, Encoding.UTF8))
+            OperationStatusText = $"Đang import... {count:N0} serial";
+        });
+
+        try
+        {
+            IEnumerable<SerialItem> EnumerateImportedItems()
             {
-                totalLines++;
+                foreach (var rawLine in File.ReadLines(ImportFilePath, Encoding.UTF8))
+                {
+                    totalLines++;
 
-                var serial = rawLine.Trim();
-                if (string.IsNullOrWhiteSpace(serial))
-                {
-                    continue;
-                }
+                    var serial = rawLine.Trim();
+                    if (string.IsNullOrWhiteSpace(serial))
+                    {
+                        continue;
+                    }
 
-                importedCount++;
-                var item = new SerialItem
-                {
-                    Index = importedCount,
-                    Serial = serial
-                };
+                    importedCount++;
+                    var item = new SerialItem
+                    {
+                        Index = importedCount,
+                        Serial = serial
+                    };
 
-                if (serial.Length != serialLength)
-                {
-                    item.Status = SerialStatus.Invalid;
-                    item.Note = "Sai độ dài";
-                    invalidCount++;
-                }
-                else if (!validSet.Add(serial))
-                {
-                    item.Status = SerialStatus.Duplicate;
-                    item.Note = "Serial trùng";
-                    duplicateCount++;
-                }
-                else
-                {
-                    item.Status = SerialStatus.Waiting;
-                    item.Note = string.Empty;
-                    waitingCount++;
-                }
+                    if (serial.Length != serialLength)
+                    {
+                        item.Status = SerialStatus.Invalid;
+                        item.Note = "Sai độ dài";
+                    }
+                    else if (!validSet.Add(serial))
+                    {
+                        item.Status = SerialStatus.Duplicate;
+                        item.Note = "Serial trùng";
+                    }
+                    else
+                    {
+                        item.Status = SerialStatus.Waiting;
+                        item.Note = string.Empty;
+                    }
 
-                yield return item;
+                    if (importedCount % 1000 == 0)
+                    {
+                        OperationStatusText = $"Đang import... {importedCount:N0} serial";
+                    }
+
+                    yield return item;
+                }
             }
-        }
 
-        await _serialItemRepository.ReplaceAllAsync(EnumerateImportedItems());
-        SetStatisticsSnapshot(new SerialItemStatistics(importedCount, waitingCount, 0, 0, 0, duplicateCount, invalidCount));
-        CurrentPage = 1;
-        LoadCurrentPageFromRepository();
-        await _printerService.ResetSoftwareCounterAsync();
-        PrinterStatus.SoftwareCounter = 0;
-        PrinterStatus.BufferCount = 0;
-        PrinterStatus.LastSentSerial = string.Empty;
-        PrinterStatus.LastPrintedSerial = string.Empty;
-        PrinterStatus.LastError = string.Empty;
-        PrinterStatus.LastUpdatedAt = DateTime.Now;
-        UpdateDerivedState();
-        await SaveStateAsync();
-        MessageBox.Show($"Đã import {importedCount} serial từ {totalLines} dòng.", "Import dữ liệu", MessageBoxButton.OK, MessageBoxImage.Information);
+            await _serialItemRepository.ReplaceAllAsync(EnumerateImportedItems(), progress);
+            var statistics = await _serialItemRepository.GetStatisticsAsync();
+            SetStatisticsSnapshot(statistics);
+            CurrentPage = 1;
+            LoadCurrentPageFromRepository();
+            await _printerService.ResetSoftwareCounterAsync();
+            PrinterStatus.SoftwareCounter = 0;
+            PrinterStatus.BufferCount = 0;
+            PrinterStatus.LastSentSerial = string.Empty;
+            PrinterStatus.LastPrintedSerial = string.Empty;
+            PrinterStatus.LastError = string.Empty;
+            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            UpdateDerivedState();
+            await SaveStateAsync();
+            OperationStatusText = $"Đã import {importedCount:N0} serial từ {totalLines:N0} dòng.";
+            MessageBox.Show($"Đã import {importedCount} serial từ {totalLines} dòng.", "Import dữ liệu", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        finally
+        {
+            EndOperation();
+        }
     }
 
     private async Task ClearSerialDataAsync()
@@ -849,103 +914,28 @@ public sealed class MainViewModel : ViewModelBase
 
     private async Task CheckDuplicateAsync()
     {
-        var serialLength = Math.Max(1, PrinterConfig.SerialLength);
-        var validSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var totalCount = 0;
-        var waitingCount = 0;
-        var sentCount = 0;
-        var printedCount = 0;
-        var errorCount = 0;
-        var duplicateCount = 0;
-        var invalidCount = 0;
-        var changedItems = new List<SerialItem>(512);
-
-        await foreach (var item in _serialItemRepository.StreamAllAsync())
+        if (TotalImportedCount == 0)
         {
-            totalCount++;
-            var originalStatus = item.Status;
-            var originalNote = item.Note ?? string.Empty;
-            var newStatus = originalStatus;
-            var newNote = originalNote;
-
-            if (originalStatus is SerialStatus.Invalid or SerialStatus.Error)
-            {
-                CountFinalStatus(originalStatus);
-                continue;
-            }
-
-            if (item.Serial.Trim().Length != serialLength)
-            {
-                newStatus = SerialStatus.Invalid;
-                newNote = "Sai độ dài";
-            }
-            else if (!validSet.Add(item.Serial))
-            {
-                newStatus = SerialStatus.Duplicate;
-                newNote = "Serial trùng";
-            }
-            else if (originalStatus == SerialStatus.Duplicate)
-            {
-                newStatus = SerialStatus.Waiting;
-                newNote = string.Empty;
-            }
-
-            if (newStatus != originalStatus || !string.Equals(newNote, originalNote, StringComparison.Ordinal))
-            {
-                item.Status = newStatus;
-                item.Note = newNote;
-                changedItems.Add(item);
-
-                if (changedItems.Count >= 500)
-                {
-                    await _serialItemRepository.UpdateRangeAsync(changedItems);
-                    changedItems.Clear();
-                }
-            }
-
-            CountFinalStatus(newStatus);
+            MessageBox.Show("Không có dữ liệu để kiểm tra.", "Kiểm tra trùng", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
         }
 
-        if (changedItems.Count > 0)
+        SetOperationStatus("Đang kiểm tra trùng bằng SQLite...", true);
+
+        try
         {
-            await _serialItemRepository.UpdateRangeAsync(changedItems);
+            await Task.Yield();
+            await _serialItemRepository.RecalculateDuplicateStatusesAsync(Math.Max(1, PrinterConfig.SerialLength));
+            var statistics = await _serialItemRepository.GetStatisticsAsync();
+            SetStatisticsSnapshot(statistics);
+            LoadCurrentPageFromRepository();
+            UpdateDerivedState();
+            await SaveStateAsync();
+            OperationStatusText = "Đã kiểm tra trùng xong.";
         }
-
-        SetStatisticsSnapshot(new SerialItemStatistics(
-            totalCount,
-            waitingCount,
-            sentCount,
-            printedCount,
-            errorCount,
-            duplicateCount,
-            invalidCount));
-        LoadCurrentPageFromRepository();
-        UpdateDerivedState();
-        await SaveStateAsync();
-
-        void CountFinalStatus(SerialStatus status)
+        finally
         {
-            switch (status)
-            {
-                case SerialStatus.Waiting:
-                    waitingCount++;
-                    break;
-                case SerialStatus.Sent:
-                    sentCount++;
-                    break;
-                case SerialStatus.Printed:
-                    printedCount++;
-                    break;
-                case SerialStatus.Error:
-                    errorCount++;
-                    break;
-                case SerialStatus.Duplicate:
-                    duplicateCount++;
-                    break;
-                case SerialStatus.Invalid:
-                    invalidCount++;
-                    break;
-            }
+            EndOperation();
         }
     }
 
@@ -1426,11 +1416,23 @@ public sealed class MainViewModel : ViewModelBase
         {
             _isRefreshingStatus = true;
             var status = await _printerService.GetStatusAsync();
+
+            var previousCounter = PrinterStatus.PrinterCounter;
+            var previousConnected = PrinterStatus.IsConnected;
+            var previousPrinting = PrinterStatus.IsPrinting;
+            var previousSoftwareCounter = PrinterStatus.SoftwareCounter;
+            var previousBufferCount = PrinterStatus.BufferCount;
+            var previousLastSentSerial = PrinterStatus.LastSentSerial;
+            var previousLastPrintedSerial = PrinterStatus.LastPrintedSerial;
+            var previousLastReceivedRawData = PrinterStatus.LastReceivedRawData;
+            var previousReceivedRawDataLog = PrinterStatus.ReceivedRawDataLog;
+            var previousLastError = PrinterStatus.LastError;
+            var previousLastUpdatedAt = PrinterStatus.LastUpdatedAt;
+
             PrinterStatus.IsConnected = status.IsConnected;
             PrinterStatus.IsPrinting = status.IsPrinting;
             PrinterStatus.PrinterCounter = status.PrinterCounter;
             _appStatePrinterCounter = status.PrinterCounter;
-            OnPropertyChanged(nameof(PrintedCount));
             PrinterStatus.SoftwareCounter = status.SoftwareCounter;
             PrinterStatus.BufferCount = status.BufferCount;
             PrinterStatus.LastSentSerial = status.LastSentSerial;
@@ -1441,7 +1443,23 @@ public sealed class MainViewModel : ViewModelBase
             PrinterStatus.LastUpdatedAt = status.LastUpdatedAt;
             UpdateDerivedState();
 
-            await SyncPrintedItemsToPrinterCounterAsync();
+            var statusChanged =
+                previousCounter != status.PrinterCounter ||
+                previousConnected != status.IsConnected ||
+                previousPrinting != status.IsPrinting ||
+                previousSoftwareCounter != status.SoftwareCounter ||
+                previousBufferCount != status.BufferCount ||
+                !string.Equals(previousLastSentSerial, status.LastSentSerial, StringComparison.Ordinal) ||
+                !string.Equals(previousLastPrintedSerial, status.LastPrintedSerial, StringComparison.Ordinal) ||
+                !string.Equals(previousLastReceivedRawData, status.LastReceivedRawData, StringComparison.Ordinal) ||
+                !string.Equals(previousReceivedRawDataLog, status.ReceivedRawDataLog, StringComparison.Ordinal) ||
+                !string.Equals(previousLastError, status.LastError, StringComparison.Ordinal) ||
+                previousLastUpdatedAt != status.LastUpdatedAt;
+
+            if (status.PrinterCounter != previousCounter)
+            {
+                await SyncPrintedItemsToPrinterCounterAsync();
+            }
 
             if (ShouldStopPrintNow)
             {
@@ -1450,7 +1468,10 @@ public sealed class MainViewModel : ViewModelBase
                 return;
             }
 
-            await SaveStateAsync();
+            if (statusChanged)
+            {
+                await SaveStateAsync();
+            }
         }
         finally
         {

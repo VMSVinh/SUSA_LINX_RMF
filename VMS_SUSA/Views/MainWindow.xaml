@@ -415,7 +415,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="2.2*" />
                                     <ColumnDefinition Width="1.1*" />
-                                    <ColumnDefinition Width="0.8*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
                                 <TextBox Grid.Column="0"
@@ -439,7 +439,8 @@
                                         Background="{StaticResource HeaderBrush}"
                                         CornerRadius="8"
                                         Padding="8,3"
-                                        Height="30">
+                                        Height="30"
+                                        MinWidth="110">
                                     <TextBlock Foreground="White"
                                                FontWeight="SemiBold"
                                                FontSize="12"
