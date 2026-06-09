@@ -14,6 +14,7 @@ namespace VMS_SUSA.ViewModels;
 
 public sealed class MainViewModel : ViewModelBase
 {
+
     private readonly IPrinterService _printerService;
     private readonly IAppStateService _appStateService;
     private readonly IPrinterDataLogService _printerDataLogService;
@@ -311,7 +312,7 @@ public sealed class MainViewModel : ViewModelBase
 
     public bool CanSend30RemoteFieldsThenStartPrint => IsConnected && WaitingCount >= 30;
 
-    public bool CanEditConfig => !IsPrinting;
+    public bool CanEditConfig => !IsPrinting && !IsConnected;
 
     private bool ShouldStopPrintNow => IsConnected
         && IsPrinting
@@ -592,12 +593,13 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        var lines = await File.ReadAllLinesAsync(ImportFilePath, Encoding.UTF8);
         var serialLength = Math.Max(1, PrinterConfig.SerialLength);
         var validSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var importedItems = new List<SerialItem>();
-        var totalLines = lines.Length;
         var index = 0;
+
+        var lines = await File.ReadAllLinesAsync(ImportFilePath, Encoding.UTF8);
+        var totalLines = lines.Length;
 
         foreach (var rawLine in lines)
         {

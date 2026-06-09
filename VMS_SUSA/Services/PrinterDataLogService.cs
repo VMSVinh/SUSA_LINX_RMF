@@ -134,4 +134,5 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
             Note = item.Note
         };
     }
+
 }
