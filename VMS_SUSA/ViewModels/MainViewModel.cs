@@ -51,6 +51,7 @@ public sealed class MainViewModel : ViewModelBase
     private string _operationStatusText = "Sẵn sàng xử lý";
     private readonly SemaphoreSlim _remoteFieldSendLock = new(1, 1);
     private readonly SemaphoreSlim _bulkSendLock = new(1, 1);
+    private bool _resetPrinterCounterAfterImport;
 
     public MainViewModel(IPrinterService printerService, IAppStateService appStateService, IFileDialogService fileDialogService, IPrinterDataLogService printerDataLogService, ISerialItemRepository serialItemRepository)
     {
@@ -151,16 +152,16 @@ public sealed class MainViewModel : ViewModelBase
         PrinterStatus.LastReceivedRawData = string.Empty;
         PrinterStatus.ReceivedRawDataLog = string.Empty;
 
-        RefreshStatisticsFromRepository();
+        await RefreshStatisticsFromRepositoryAsync();
         OnPropertyChanged(nameof(PrintedCount));
         if (TotalImportedCount > 0)
         {
             CurrentPage = 1;
-            LoadCurrentPageFromRepository();
+            await LoadCurrentPageFromRepositoryAsync();
         }
         else if (state is null)
         {
-            LoadDemoData();
+            await LoadDemoDataAsync();
             UpdateDerivedState();
             _lastSavedAt = default;
             _clockTimer.Start();
@@ -174,7 +175,7 @@ public sealed class MainViewModel : ViewModelBase
 
         UpdateDerivedState();
         CurrentPage = 1;
-        LoadCurrentPageFromRepository();
+        await LoadCurrentPageFromRepositoryAsync();
         UpdateCurrentTime();
         _lastSavedAt = state?.SavedAt ?? default;
         _clockTimer.Start();
@@ -562,9 +563,9 @@ public sealed class MainViewModel : ViewModelBase
         IsBusyOperation = false;
     }
 
-    private void RefreshStatisticsFromRepository()
+    private async Task RefreshStatisticsFromRepositoryAsync()
     {
-        _serialStatistics = _serialItemRepository.GetStatisticsAsync().GetAwaiter().GetResult();
+        _serialStatistics = await _serialItemRepository.GetStatisticsAsync().ConfigureAwait(false);
         TotalImportedCount = _serialStatistics.TotalCount;
     }
 
@@ -646,13 +647,24 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
-    private void LoadCurrentPageFromRepository()
+    private async Task LoadCurrentPageFromRepositoryAsync()
     {
-        var page = _serialItemRepository
+        var page = await _serialItemRepository
             .GetPageAsync(CurrentPage, SerialPageSize, SearchText, SelectedStatusFilter)
-            .GetAwaiter()
-            .GetResult();
+            .ConfigureAwait(false);
 
+        if (Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+        {
+            await dispatcher.InvokeAsync(() => ApplyLoadedPage(page));
+        }
+        else
+        {
+            ApplyLoadedPage(page);
+        }
+    }
+
+    private void ApplyLoadedPage(SerialItemPageResult page)
+    {
         FilteredSerialItems.Clear();
         foreach (var item in page.Items)
         {
@@ -761,7 +773,7 @@ public sealed class MainViewModel : ViewModelBase
 
     private void RefreshFilteredSerialItems()
     {
-        LoadCurrentPageFromRepository();
+        _ = LoadCurrentPageFromRepositoryAsync();
     }
 
     private void UpdatePagingCommandStates()
@@ -781,7 +793,7 @@ public sealed class MainViewModel : ViewModelBase
         }
 
         CurrentPage = targetPage;
-        LoadCurrentPageFromRepository();
+        _ = LoadCurrentPageFromRepositoryAsync();
     }
 
     private void ReindexSerialItems()
@@ -879,8 +891,20 @@ public sealed class MainViewModel : ViewModelBase
             var statistics = await _serialItemRepository.GetStatisticsAsync();
             SetStatisticsSnapshot(statistics);
             CurrentPage = 1;
-            LoadCurrentPageFromRepository();
+            await LoadCurrentPageFromRepositoryAsync();
             await _printerService.ResetSoftwareCounterAsync();
+            if (IsConnected && !IsPrinting)
+            {
+                await _printerService.ResetMessagePrintCountAsync();
+                _resetPrinterCounterAfterImport = false;
+            }
+            else
+            {
+                _resetPrinterCounterAfterImport = true;
+            }
+
+            PrinterStatus.PrinterCounter = 0;
+            _appStatePrinterCounter = 0;
             PrinterStatus.SoftwareCounter = 0;
             PrinterStatus.LastSentSerial = string.Empty;
             PrinterStatus.LastPrintedSerial = string.Empty;
@@ -903,7 +927,7 @@ public sealed class MainViewModel : ViewModelBase
         CurrentPage = 1;
         await _serialItemRepository.DeleteAllAsync();
         SetStatisticsSnapshot(new SerialItemStatistics(0, 0, 0, 0, 0, 0, 0));
-        LoadCurrentPageFromRepository();
+        await LoadCurrentPageFromRepositoryAsync();
         PrinterStatus.SoftwareCounter = 0;
         PrinterStatus.LastSentSerial = string.Empty;
         PrinterStatus.LastPrintedSerial = string.Empty;
@@ -929,7 +953,7 @@ public sealed class MainViewModel : ViewModelBase
             await _serialItemRepository.RecalculateDuplicateStatusesAsync(Math.Max(1, PrinterConfig.SerialLength));
             var statistics = await _serialItemRepository.GetStatisticsAsync();
             SetStatisticsSnapshot(statistics);
-            LoadCurrentPageFromRepository();
+            await LoadCurrentPageFromRepositoryAsync();
             UpdateDerivedState();
             await SaveStateAsync();
             OperationStatusText = "Đã kiểm tra trùng xong.";
@@ -994,9 +1018,9 @@ public sealed class MainViewModel : ViewModelBase
         PrinterStatus.LastReceivedRawData = string.Empty;
         PrinterStatus.ReceivedRawDataLog = string.Empty;
 
-        RefreshStatisticsFromRepository();
+        await RefreshStatisticsFromRepositoryAsync();
         CurrentPage = 1;
-        LoadCurrentPageFromRepository();
+        await LoadCurrentPageFromRepositoryAsync();
         UpdateDerivedState();
         _lastSavedAt = state.SavedAt;
         MessageBox.Show("Đã tải lại dữ liệu cấu hình và kết quả từ Data Logs.", "Tải lại cấu hình", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1019,6 +1043,12 @@ public sealed class MainViewModel : ViewModelBase
             if (connected)
             {
                 var persistedSoftwareCounter = PrinterStatus.SoftwareCounter;
+                if (_resetPrinterCounterAfterImport)
+                {
+                    await _printerService.ResetMessagePrintCountAsync();
+                    _resetPrinterCounterAfterImport = false;
+                }
+
                 await RefreshPrinterStatusAsync();
                 await _printerService.SetSoftwareCounterAsync(persistedSoftwareCounter);
                 PrinterStatus.IsConnected = true;
@@ -1212,7 +1242,7 @@ public sealed class MainViewModel : ViewModelBase
                     PrinterStatus.LastUpdatedAt = DateTime.Now;
                     await _serialItemRepository.UpdateAsync(nextItem);
                     AdjustStatisticsForStatusChange(oldStatus, nextItem.Status);
-                    LoadCurrentPageFromRepository();
+                    await LoadCurrentPageFromRepositoryAsync();
                     UpdateDerivedState();
                     await SaveStateAsync();
                     return;
@@ -1239,7 +1269,7 @@ public sealed class MainViewModel : ViewModelBase
 
             if (changed)
             {
-                LoadCurrentPageFromRepository();
+                await LoadCurrentPageFromRepositoryAsync();
                 UpdateDerivedState();
                 await SaveStateAsync();
             }
@@ -1306,7 +1336,7 @@ public sealed class MainViewModel : ViewModelBase
         PrinterStatus.LastUpdatedAt = DateTime.Now;
         await _serialItemRepository.UpdateAsync(item);
         AdjustStatisticsForStatusChange(previousStatus, item.Status);
-        LoadCurrentPageFromRepository();
+        await LoadCurrentPageFromRepositoryAsync();
         UpdateDerivedState();
         await SaveStateAsync();
     }
@@ -1316,7 +1346,7 @@ public sealed class MainViewModel : ViewModelBase
         var lastPrintedSerial = await _serialItemRepository.ReconcilePrintedItemsAsync(PrinterStatus.PrinterCounter);
         PrinterStatus.LastPrintedSerial = lastPrintedSerial ?? string.Empty;
         SetStatisticsSnapshot(await _serialItemRepository.GetStatisticsAsync());
-        LoadCurrentPageFromRepository();
+        await LoadCurrentPageFromRepositoryAsync();
         UpdateDerivedState();
     }
 
@@ -1347,7 +1377,7 @@ public sealed class MainViewModel : ViewModelBase
             var lastPrinted = await _serialItemRepository.GetLastByStatusAsync(SerialStatus.Printed);
             PrinterStatus.LastPrintedSerial = lastPrinted?.Serial ?? string.Empty;
             PrinterStatus.LastUpdatedAt = now;
-            LoadCurrentPageFromRepository();
+            await LoadCurrentPageFromRepositoryAsync();
             UpdateDerivedState();
             await SaveStateAsync();
         }
@@ -1392,7 +1422,7 @@ public sealed class MainViewModel : ViewModelBase
             PrinterStatus.LastUpdatedAt = DateTime.Now;
             await _serialItemRepository.UpdateAsync(nextItem);
             AdjustStatisticsForStatusChange(previousStatus, nextItem.Status);
-            LoadCurrentPageFromRepository();
+            await LoadCurrentPageFromRepositoryAsync();
             UpdateDerivedState();
             await SaveStateAsync();
 
@@ -1406,7 +1436,7 @@ public sealed class MainViewModel : ViewModelBase
         PrinterStatus.LastUpdatedAt = DateTime.Now;
         await _serialItemRepository.UpdateAsync(nextItem);
         AdjustStatisticsForStatusChange(failedPreviousStatus, nextItem.Status);
-        LoadCurrentPageFromRepository();
+        await LoadCurrentPageFromRepositoryAsync();
         UpdateDerivedState();
         await SaveStateAsync();
     }
@@ -1419,6 +1449,11 @@ public sealed class MainViewModel : ViewModelBase
     private async Task RefreshPrinterStatusAsync()
     {
         if (_isRefreshingStatus)
+        {
+            return;
+        }
+
+        if (_remoteFieldSendLock.CurrentCount == 0)
         {
             return;
         }
@@ -1530,7 +1565,7 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(LastStateSavedText));
     }
 
-    private void LoadDemoData()
+    private async Task LoadDemoDataAsync()
     {
         var demoItems = Enumerable.Range(1, 20)
             .Select(i => new SerialItem
@@ -1542,10 +1577,10 @@ public sealed class MainViewModel : ViewModelBase
             })
             .ToList();
 
-        _serialItemRepository.ReplaceAllAsync(demoItems).GetAwaiter().GetResult();
+        await _serialItemRepository.ReplaceAllAsync(demoItems).ConfigureAwait(false);
         CurrentPage = 1;
         SetStatisticsSnapshot(new SerialItemStatistics(20, 20, 0, 0, 0, 0, 0));
-        LoadCurrentPageFromRepository();
+        await LoadCurrentPageFromRepositoryAsync();
     }
 }
 
