@@ -184,7 +184,7 @@
                                             HorizontalAlignment="Stretch"
                                             Background="#FF7C3AED"
                                             BorderBrush="#FF7C3AED"
-                                            FontSize="12" />
+                                            FontSize="12" Width="120" />
 
                                     <Button Grid.Row="3" Grid.Column="0"
                                             Content="Bắt đầu in"
