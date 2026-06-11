@@ -295,6 +295,31 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
         return true;
     }
 
+    public async Task<bool> ResetMessagePrintCountAsync()
+    {
+        if (!IsConnected())
+        {
+            _status.LastError = "Chưa kết nối máy in";
+            _status.LastUpdatedAt = DateTime.Now;
+            return false;
+        }
+
+        var payload = new byte[20];
+        BitConverter.GetBytes(0u).CopyTo(payload, 0);
+        var result = await SendCommandAsync(LinxCommands.SetMessagePrintCount, payload).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            _status.LastError = result.ErrorMessage ?? "Đặt message counter = 0 thất bại.";
+            _status.LastUpdatedAt = DateTime.Now;
+            return false;
+        }
+
+        _status.PrinterCounter = 0;
+        _status.LastError = string.Empty;
+        _status.LastUpdatedAt = DateTime.Now;
+        return true;
+    }
+
     public async Task<PrinterStatus> GetStatusAsync()
     {
         if (!IsConnected())

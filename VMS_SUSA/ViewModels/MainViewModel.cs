@@ -87,6 +87,7 @@ public sealed class MainViewModel : ViewModelBase
         StopPrintCommand = new AsyncRelayCommand(StopPrintAsync, () => CanStopPrint);
         Send30RemoteFieldsThenStartPrintCommand = new AsyncRelayCommand(Send30RemoteFieldsThenStartPrintAsync, () => CanSend30RemoteFieldsThenStartPrint);
         ClearDataBufferCommand = new AsyncRelayCommand(ClearDataBufferAsync, () => IsConnected);
+        ResetMessageCounterCommand = new AsyncRelayCommand(ResetMessageCounterAsync, () => CanResetMessageCounter);
         GetPrinterStatusCommand = new AsyncRelayCommand(GetPrinterStatusAsync, () => IsConnected);
         ResetErrorCommand = new AsyncRelayCommand(ResetErrorAsync, () => IsConnected || !string.IsNullOrWhiteSpace(PrinterStatus.LastError));
         FirstPageCommand = new RelayCommand(() => GoToPage(1), () => CanGoPreviousPage);
@@ -109,6 +110,7 @@ public sealed class MainViewModel : ViewModelBase
             StopPrintCommand,
             Send30RemoteFieldsThenStartPrintCommand,
             ClearDataBufferCommand,
+            ResetMessageCounterCommand,
             GetPrinterStatusCommand,
             ResetErrorCommand,
             FirstPageCommand,
@@ -387,6 +389,8 @@ public sealed class MainViewModel : ViewModelBase
 
     public bool CanSend30RemoteFieldsThenStartPrint => IsConnected && ValidCount - PrinterStatus.PrinterCounter >= 30;
 
+    public bool CanResetMessageCounter => IsConnected && !IsConnecting;
+
     public bool CanEditConfig => !IsPrinting && !IsConnected;
 
     public bool CanGoPreviousPage => CurrentPage > 1;
@@ -463,6 +467,7 @@ public sealed class MainViewModel : ViewModelBase
     public IRelayCommand StopPrintCommand { get; }
     public IRelayCommand Send30RemoteFieldsThenStartPrintCommand { get; }
     public IRelayCommand ClearDataBufferCommand { get; }
+    public IRelayCommand ResetMessageCounterCommand { get; }
     public IRelayCommand GetPrinterStatusCommand { get; }
     public IRelayCommand ResetErrorCommand { get; }
     public IRelayCommand FirstPageCommand { get; }
@@ -491,7 +496,9 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStartPrint));
         OnPropertyChanged(nameof(CanStopPrint));
         OnPropertyChanged(nameof(ClearDataBufferCommand));
+        OnPropertyChanged(nameof(ResetMessageCounterCommand));
         OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
+        OnPropertyChanged(nameof(CanResetMessageCounter));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(LastStateSavedText));
         UpdateCommandStates();
@@ -744,7 +751,9 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStartPrint));
         OnPropertyChanged(nameof(CanStopPrint));
         OnPropertyChanged(nameof(ClearDataBufferCommand));
+        OnPropertyChanged(nameof(ResetMessageCounterCommand));
         OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
+        OnPropertyChanged(nameof(CanResetMessageCounter));
         OnPropertyChanged(nameof(CanEditConfig));
         OnPropertyChanged(nameof(CanGoPreviousPage));
         OnPropertyChanged(nameof(CanGoNextPage));
@@ -1078,6 +1087,35 @@ public sealed class MainViewModel : ViewModelBase
             ? "Xóa dữ liệu đệm thất bại"
             : _printerService.LastError;
         PrinterStatus.LastUpdatedAt = DateTime.Now;
+        UpdateDerivedState();
+        await SaveStateAsync();
+    }
+
+    private async Task ResetMessageCounterAsync()
+    {
+        if (!IsConnected)
+        {
+            MessageBox.Show("Chưa kết nối máy in.", "Đặt message counter = 0", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!await _printerService.ResetMessagePrintCountAsync())
+        {
+            PrinterStatus.LastError = string.IsNullOrWhiteSpace(_printerService.LastError)
+                ? "Đặt message counter = 0 thất bại"
+                : _printerService.LastError;
+            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            UpdateDerivedState();
+            await SaveStateAsync();
+            MessageBox.Show(PrinterStatus.LastError, "Đặt message counter = 0", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        PrinterStatus.PrinterCounter = 0;
+        _appStatePrinterCounter = 0;
+        PrinterStatus.LastError = string.Empty;
+        PrinterStatus.LastUpdatedAt = DateTime.Now;
+        OnPropertyChanged(nameof(PrintedCount));
         UpdateDerivedState();
         await SaveStateAsync();
     }

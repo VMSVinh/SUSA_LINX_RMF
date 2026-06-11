@@ -127,6 +127,7 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="1*" />
@@ -148,29 +149,51 @@
                                             Height="40"
                                             HorizontalAlignment="Stretch" Background="#FF263656" />
 
-                                    <Button Grid.Row="1" Grid.Column="0"
-                                            Content="Nạp data đệm"
-                                            Command="{Binding Send30RemoteFieldsThenStartPrintCommand}"
-                                            Style="{StaticResource PrimaryButtonStyle}"
-                                            Margin="0,0,6,8"
-                                            Height="40"
-                                            HorizontalAlignment="Stretch" Background="#FFEB25A6" FontSize="13" />
-                                    <Button Grid.Row="1" Grid.Column="1"
-                                            Content="Xóa data đệm"
-                                            Command="{Binding ClearDataBufferCommand}"
-                                            Style="{StaticResource NeutralButtonStyle}"
-                                            Margin="6,0,0,8"
-                                            Height="40"
-                                            HorizontalAlignment="Stretch" Background="#FF8F8F8F" FontSize="13" />
+                                    <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
 
-                                    <Button Grid.Row="2" Grid.Column="0"
+                                        <Button Grid.Column="0"
+                                                Content="Nạp data đệm"
+                                                Command="{Binding Send30RemoteFieldsThenStartPrintCommand}"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Margin="0,0,6,0"
+                                                Height="40"
+                                                HorizontalAlignment="Stretch"
+                                                Background="#FFEB25A6"
+                                                FontSize="13" />
+                                        <Button Grid.Column="1"
+                                                Content="Xóa data đệm"
+                                                Command="{Binding ClearDataBufferCommand}"
+                                                Style="{StaticResource NeutralButtonStyle}"
+                                                Margin="3,0,3,0"
+                                                Height="40"
+                                                HorizontalAlignment="Stretch"
+                                                Background="#FF8F8F8F"
+                                                FontSize="13" />
+                                    </Grid>
+
+                                    <Button Grid.Row="2" Grid.ColumnSpan="2"
+                                            Content="Đặt counter = 0"
+                                            Command="{Binding ResetMessageCounterCommand}"
+                                            Style="{StaticResource SuccessButtonStyle}"
+                                            Margin="0,0,0,8"
+                                            Height="40"
+                                            HorizontalAlignment="Stretch"
+                                            Background="#FF7C3AED"
+                                            BorderBrush="#FF7C3AED"
+                                            FontSize="12" />
+
+                                    <Button Grid.Row="3" Grid.Column="0"
                                             Content="Bắt đầu in"
                                             Command="{Binding StartPrintCommand}"
                                             Style="{StaticResource PrimaryButtonStyle}"
                                             Margin="0,0,6,0"
                                             Height="40"
                                             HorizontalAlignment="Stretch" />
-                                    <Button Grid.Row="2" Grid.Column="1"
+                                    <Button Grid.Row="3" Grid.Column="1"
                                             Content="Dừng in"
                                             Command="{Binding StopPrintCommand}"
                                             Style="{StaticResource DangerButtonStyle}"

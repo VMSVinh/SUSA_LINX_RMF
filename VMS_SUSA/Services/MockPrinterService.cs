@@ -180,6 +180,24 @@ public sealed class MockPrinterService : IPrinterService
         return Task.FromResult(true);
     }
 
+    public Task<bool> ResetMessagePrintCountAsync()
+    {
+        lock (_sync)
+        {
+            if (!_isConnected)
+            {
+                _lastError = "Không thể đặt message counter = 0";
+                return Task.FromResult(false);
+            }
+
+            _printerCounter = 0;
+            _lastError = string.Empty;
+            _lastUpdatedAt = DateTime.Now;
+        }
+
+        return Task.FromResult(true);
+    }
+
     public Task<PrinterStatus> GetStatusAsync()
     {
         lock (_sync)
