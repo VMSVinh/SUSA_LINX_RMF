@@ -338,7 +338,10 @@ public sealed class Linx8900PrinterService : IPrinterService, IDisposable
             _status.LastUpdatedAt = DateTime.Now;
         }
 
-        await TryRefreshCurrentMessagePrintCountAsync().ConfigureAwait(false);
+        if (!_status.IsPrinting)
+        {
+            await TryRefreshCurrentMessagePrintCountAsync().ConfigureAwait(false);
+        }
 
         _status.BufferCount = GetQueueCount();
         return SnapshotStatus();

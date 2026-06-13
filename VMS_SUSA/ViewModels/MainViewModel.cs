@@ -20,6 +20,7 @@ public sealed class MainViewModel : ViewModelBase
     private const int RemoteFieldBufferTarget = 30;
     private static readonly TimeSpan GridRefreshDelay = TimeSpan.FromMilliseconds(1000);
     private static readonly TimeSpan StateSaveDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan AutoStopStabilizationDelay = TimeSpan.FromMilliseconds(300);
 
     private readonly IPrinterService _printerService;
     private readonly IAppStateService _appStateService;
@@ -57,11 +58,16 @@ public sealed class MainViewModel : ViewModelBase
     private readonly SemaphoreSlim _remoteFieldDataSendLock = new(1, 1);
     private readonly SemaphoreSlim _bulkSendLock = new(1, 1);
     private readonly SemaphoreSlim _bufferTopUpLock = new(1, 1);
+    private readonly object _autoStopSync = new();
     private readonly object _deferredWorkSync = new();
     private bool _resetPrinterCounterAfterImport;
     private bool _isGridRefreshQueued;
     private bool _isStateSaveQueued;
     private bool _isStateSaveRequestedAgain;
+    private bool _isAutoStopTaskRunning;
+    private bool _isAutoStopRequested;
+    private int _autoStopRequestVersion;
+    private int _autoStopCounterCandidate;
 
     public MainViewModel(IPrinterService printerService, IAppStateService appStateService, IFileDialogService fileDialogService, IPrinterDataLogService printerDataLogService, ISerialItemRepository serialItemRepository)
     {
@@ -1475,8 +1481,7 @@ public sealed class MainViewModel : ViewModelBase
 
             if (triggerState.ShouldStopPrint)
             {
-                await FinalizeRemainingSentItemsAsync();
-                await RunOnUiThreadAsync(StopPrintAsync);
+                RequestAutoStop(PrinterStatus.PrinterCounter);
                 return;
             }
 
@@ -1578,6 +1583,90 @@ public sealed class MainViewModel : ViewModelBase
             });
             QueueGridRefresh();
             QueueStateSave();
+        }
+    }
+
+    private void RequestAutoStop(int counterCandidate)
+    {
+        lock (_autoStopSync)
+        {
+            _isAutoStopRequested = true;
+            _autoStopCounterCandidate = counterCandidate;
+            _autoStopRequestVersion++;
+
+            if (_isAutoStopTaskRunning)
+            {
+                return;
+            }
+
+            _isAutoStopTaskRunning = true;
+        }
+
+        _ = RunAutoStopWatcherAsync();
+    }
+
+    private async Task RunAutoStopWatcherAsync()
+    {
+        try
+        {
+            while (true)
+            {
+                int requestVersion;
+                int counterCandidate;
+
+                lock (_autoStopSync)
+                {
+                    if (!_isAutoStopRequested)
+                    {
+                        _isAutoStopTaskRunning = false;
+                        return;
+                    }
+
+                    requestVersion = _autoStopRequestVersion;
+                    counterCandidate = _autoStopCounterCandidate;
+                    _isAutoStopRequested = false;
+                }
+
+                await Task.Delay(AutoStopStabilizationDelay).ConfigureAwait(false);
+
+                var shouldStop = await RunOnUiThreadAsync(() =>
+                    IsConnected &&
+                    IsPrinting &&
+                    PrinterStatus.PrinterCounter == counterCandidate &&
+                    ShouldStopPrintNow);
+
+                var requestVersionChanged = false;
+                lock (_autoStopSync)
+                {
+                    requestVersionChanged = requestVersion != _autoStopRequestVersion;
+                }
+
+                if (requestVersionChanged)
+                {
+                    continue;
+                }
+
+                if (!shouldStop)
+                {
+                    return;
+                }
+
+                await FinalizeRemainingSentItemsAsync();
+                await RunOnUiThreadAsync(StopPrintAsync);
+                return;
+            }
+        }
+        finally
+        {
+            lock (_autoStopSync)
+            {
+                _isAutoStopTaskRunning = false;
+                if (_isAutoStopRequested)
+                {
+                    _isAutoStopTaskRunning = true;
+                    _ = RunAutoStopWatcherAsync();
+                }
+            }
         }
     }
 
@@ -1747,9 +1836,7 @@ public sealed class MainViewModel : ViewModelBase
 
             if (ShouldStopPrintNow)
             {
-                await FinalizeRemainingSentItemsAsync();
-                await StopPrintAsync();
-                return;
+                RequestAutoStop(PrinterStatus.PrinterCounter);
             }
 
             if (statusChanged)
