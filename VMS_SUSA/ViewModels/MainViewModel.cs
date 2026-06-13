@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -45,7 +46,7 @@ public sealed class MainViewModel : ViewModelBase
     private int _filteredTotalCount;
     private int _currentPage = 1;
     private int _totalPages = 1;
-    private SerialItemStatistics _serialStatistics = new(0, 0, 0, 0, 0, 0, 0);
+    private SerialItemStatistics _serialStatistics = new(0, 0, 0, 0, 0, 0);
     private int _appStatePrinterCounter;
     private bool _isConnecting;
     private bool _isBusyOperation;
@@ -331,13 +332,11 @@ public sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _totalImportedCount, value);
     }
 
-    public int ValidCount => _serialStatistics.WaitingCount + _serialStatistics.SentCount + _serialStatistics.PrintedCount;
+    public int ValidCount => _serialStatistics.TotalCount - ErrorCount - DuplicateCount - InvalidCount;
 
     public int DuplicateCount => _serialStatistics.DuplicateCount;
 
     public int InvalidCount => _serialStatistics.InvalidCount;
-
-    public int WaitingCount => _serialStatistics.WaitingCount;
 
     public int SentCount => _serialStatistics.SentCount;
 
@@ -347,7 +346,7 @@ public sealed class MainViewModel : ViewModelBase
 
     public int ErrorCount => _serialStatistics.ErrorCount;
 
-    public int RemainingCount => WaitingCount;
+    public int RemainingCount => _serialStatistics.TotalCount - SentCount - PrintedCount - ErrorCount - DuplicateCount - InvalidCount;
 
     public int DisplayedCount
     {
@@ -601,19 +600,17 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        var waiting = _serialStatistics.WaitingCount;
         var sent = _serialStatistics.SentCount;
         var printed = _serialStatistics.PrintedCount;
         var error = _serialStatistics.ErrorCount;
         var duplicate = _serialStatistics.DuplicateCount;
         var invalid = _serialStatistics.InvalidCount;
 
-        ApplyDelta(oldStatus, -1, ref waiting, ref sent, ref printed, ref error, ref duplicate, ref invalid);
-        ApplyDelta(newStatus, +1, ref waiting, ref sent, ref printed, ref error, ref duplicate, ref invalid);
+        ApplyDelta(oldStatus, -1, ref sent, ref printed, ref error, ref duplicate, ref invalid);
+        ApplyDelta(newStatus, +1, ref sent, ref printed, ref error, ref duplicate, ref invalid);
 
         _serialStatistics = new SerialItemStatistics(
             _serialStatistics.TotalCount,
-            waiting,
             sent,
             printed,
             error,
@@ -624,7 +621,6 @@ public sealed class MainViewModel : ViewModelBase
     private static void ApplyDelta(
         SerialStatus status,
         int delta,
-        ref int waiting,
         ref int sent,
         ref int printed,
         ref int error,
@@ -633,9 +629,6 @@ public sealed class MainViewModel : ViewModelBase
     {
         switch (status)
         {
-            case SerialStatus.Waiting:
-                waiting += delta;
-                break;
             case SerialStatus.Sent:
                 sent += delta;
                 break;
@@ -700,7 +693,6 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ValidCount));
         OnPropertyChanged(nameof(DuplicateCount));
         OnPropertyChanged(nameof(InvalidCount));
-        OnPropertyChanged(nameof(WaitingCount));
         OnPropertyChanged(nameof(SentCount));
         OnPropertyChanged(nameof(PrintedCount));
         OnPropertyChanged(nameof(ErrorCount));
@@ -732,7 +724,6 @@ public sealed class MainViewModel : ViewModelBase
     private void UpdatePrintProgressState()
     {
         OnPropertyChanged(nameof(ValidCount));
-        OnPropertyChanged(nameof(WaitingCount));
         OnPropertyChanged(nameof(SentCount));
         OnPropertyChanged(nameof(PrintedCount));
         OnPropertyChanged(nameof(RemainingCount));
@@ -870,7 +861,7 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        if (WaitingCount == 0)
+        if (RemainingCount == 0)
         {
             SystemWarningText = "Đã hết dữ liệu in";
             return;
@@ -942,12 +933,77 @@ public sealed class MainViewModel : ViewModelBase
 
     private async Task BrowseImportFileAsync()
     {
+        await ExportCurrentGridToCsvAsync();
         var filePath = await _fileDialogService.OpenTextFileAsync();
         if (!string.IsNullOrWhiteSpace(filePath))
         {
             ImportFilePath = filePath;
             await ImportSerialFileAsync();
         }
+    }
+
+    private async Task ExportCurrentGridToCsvAsync()
+    {
+        var searchText = await RunOnUiThreadAsync(() => SearchText);
+        var selectedStatusFilter = await RunOnUiThreadAsync(() => SelectedStatusFilter);
+        var rows = await _serialItemRepository.GetFilteredAsync(searchText, selectedStatusFilter);
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var fileName = $"{DateTime.Now:ss-mm-hh-dd-MM-yyyy}-dataprint.csv";
+            var exportPath = Path.Combine(_printerDataLogService.HistoryDataFolderPath, fileName);
+            var csv = new StringBuilder();
+            csv.AppendLine("STT,Serial,DoDai,TrangThai,ThoiGianGui,ThoiGianIn,GhiChu");
+
+            foreach (var item in rows)
+            {
+                csv.AppendLine(string.Join(",",
+                    EscapeCsv(item.Index.ToString(CultureInfo.InvariantCulture)),
+                    EscapeCsv(ExcelTextValue(item.Serial)),
+                    EscapeCsv(item.Length.ToString(CultureInfo.InvariantCulture)),
+                    EscapeCsv(item.StatusText),
+                    EscapeCsv(FormatCsvDate(item.SentAt)),
+                    EscapeCsv(FormatCsvDate(item.PrintedAt)),
+                    EscapeCsv(item.Note)));
+            }
+
+            await File.WriteAllTextAsync(exportPath, csv.ToString(), new UTF8Encoding(true));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Không thể xuất CSV dữ liệu hiện tại. Chi tiết: {ex.Message}",
+                "Xuất CSV",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    private static string FormatCsvDate(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture)
+            : string.Empty;
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        var text = value ?? string.Empty;
+        var escaped = text.Replace("\"", "\"\"");
+        return escaped.Contains(',') || escaped.Contains('"') || escaped.Contains('\n') || escaped.Contains('\r')
+            ? $"\"{escaped}\""
+            : escaped;
+    }
+
+    private static string ExcelTextValue(string? value)
+    {
+        var text = value ?? string.Empty;
+        var escaped = text.Replace("\"", "\"\"");
+        return $"=\"{escaped}\"";
     }
 
     private async Task ImportSerialFileAsync()
@@ -1037,7 +1093,7 @@ public sealed class MainViewModel : ViewModelBase
         ImportFilePath = string.Empty;
         CurrentPage = 1;
         await _serialItemRepository.DeleteAllAsync();
-        SetStatisticsSnapshot(new SerialItemStatistics(0, 0, 0, 0, 0, 0, 0));
+        SetStatisticsSnapshot(new SerialItemStatistics(0, 0, 0, 0, 0, 0));
         await LoadCurrentPageFromRepositoryAsync();
         PrinterStatus.SoftwareCounter = 0;
         PrinterStatus.LastSentSerial = string.Empty;
@@ -1765,7 +1821,7 @@ public sealed class MainViewModel : ViewModelBase
 
         await _serialItemRepository.ReplaceAllAsync(demoItems).ConfigureAwait(false);
         CurrentPage = 1;
-        SetStatisticsSnapshot(new SerialItemStatistics(20, 20, 0, 0, 0, 0, 0));
+        SetStatisticsSnapshot(new SerialItemStatistics(20, 0, 0, 0, 0, 0));
         await LoadCurrentPageFromRepositoryAsync();
     }
 }

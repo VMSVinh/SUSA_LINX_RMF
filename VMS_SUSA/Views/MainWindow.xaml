@@ -388,12 +388,6 @@
                                 </Border>
                                 <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
                                     <StackPanel>
-                                        <TextBlock Text="Chờ" Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                                        <TextBlock Text="{Binding WaitingCount}" FontSize="16" FontWeight="Bold" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource CardBorderStyle}" Width="82" Padding="8" Margin="0,0,6,6">
-                                    <StackPanel>
                                         <TextBlock Text="Đã gửi" Foreground="{StaticResource MutedBrush}" FontSize="12" />
                                         <TextBlock Text="{Binding PrinterStatus.SoftwareCounter}" FontSize="16" FontWeight="Bold" />
                                     </StackPanel>

@@ -30,7 +30,8 @@ public partial class App : Application
         var appStateService = new JsonAppStateService();
         _sqliteSerialItemRepository = new SqliteSerialItemRepository();
         await _sqliteSerialItemRepository.InitializeAsync();
-        var printerDataLogService = new PrinterDataLogService(_sqliteSerialItemRepository);
+        var historyDataFolderPath = _licenseState?.HistoryDataFolderPath;
+        var printerDataLogService = new PrinterDataLogService(_sqliteSerialItemRepository, historyDataFolderPath);
         var printerService = new Linx8900PrinterService(printerDataLogService);
         _mainViewModel = new MainViewModel(printerService, appStateService, fileDialogService, printerDataLogService, _sqliteSerialItemRepository);
 

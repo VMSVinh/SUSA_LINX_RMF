@@ -13,7 +13,6 @@ public sealed record SerialItemPageResult(
 
 public sealed record SerialItemStatistics(
     int TotalCount,
-    int WaitingCount,
     int SentCount,
     int PrintedCount,
     int ErrorCount,

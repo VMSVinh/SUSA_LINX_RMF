@@ -20,12 +20,13 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
     private int _rawLogAppendCount;
     private int _rawLogFlushRunning;
 
-    public PrinterDataLogService(ISerialItemRepository serialItemRepository)
+    public PrinterDataLogService(ISerialItemRepository serialItemRepository, string? historyDataFolderPath = null)
     {
         _serialItemRepository = serialItemRepository;
         DataLogsFolderPath = Path.Combine(AppContext.BaseDirectory, "Data Logs");
         Directory.CreateDirectory(DataLogsFolderPath);
         SerialResultsFilePath = serialItemRepository.DatabasePath;
+        HistoryDataFolderPath = NormalizeHistoryDataFolderPath(historyDataFolderPath);
         RawPrinterLogFilePath = Path.Combine(DataLogsFolderPath, "printer_raw.log");
     }
 
@@ -34,6 +35,8 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
     public string SerialResultsFilePath { get; }
 
     public string RawPrinterLogFilePath { get; }
+
+    public string HistoryDataFolderPath { get; }
 
     public async Task SaveSerialItemsAsync(IEnumerable<SerialItem> items)
     {
@@ -184,5 +187,20 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
 
         var trimmedLines = lines.Skip(lines.Count - MaxRawLogLines).ToArray();
         await File.WriteAllLinesAsync(RawPrinterLogFilePath, trimmedLines, Encoding.UTF8).ConfigureAwait(false);
+    }
+
+    private static string NormalizeHistoryDataFolderPath(string? folderPath)
+    {
+        var path = string.IsNullOrWhiteSpace(folderPath)
+            ? Path.Combine(AppContext.BaseDirectory, "History Data")
+            : folderPath.Trim();
+
+        if (!Path.IsPathRooted(path))
+        {
+            path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, path));
+        }
+
+        Directory.CreateDirectory(path);
+        return path;
     }
 }

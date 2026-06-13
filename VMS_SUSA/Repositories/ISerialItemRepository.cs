@@ -9,6 +9,7 @@ public interface ISerialItemRepository
     Task InitializeAsync();
     Task ReplaceAllAsync(IEnumerable<SerialItem> items, IProgress<int>? progress = null);
     Task<List<SerialItem>> GetAllAsync();
+    Task<List<SerialItem>> GetFilteredAsync(string? searchText = null, SerialStatus? statusFilter = null);
     IAsyncEnumerable<SerialItem> StreamAllAsync();
     IAsyncEnumerable<SerialItem> StreamByStatusesAsync(IEnumerable<SerialStatus> statuses);
     Task<SerialItemPageResult> GetPageAsync(int pageNumber, int pageSize, string? searchText = null, SerialStatus? statusFilter = null);

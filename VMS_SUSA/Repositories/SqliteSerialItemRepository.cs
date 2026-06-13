@@ -176,6 +176,41 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
         }
     }
 
+    public async Task<List<SerialItem>> GetFilteredAsync(string? searchText = null, SerialStatus? statusFilter = null)
+    {
+        await _sync.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync().ConfigureAwait(false);
+
+            var whereClause = BuildWhereClause(searchText, statusFilter);
+            var sql = $"""
+                SELECT display_index, serial, status, sent_at, printed_at, note
+                FROM serial_items
+                {whereClause}
+                ORDER BY display_index ASC;
+                """;
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            BindFilters(command, searchText, statusFilter);
+
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            var items = new List<SerialItem>();
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                items.Add(ReadSerialItem(reader));
+            }
+
+            return items;
+        }
+        finally
+        {
+            _sync.Release();
+        }
+    }
+
     public async IAsyncEnumerable<SerialItem> StreamAllAsync()
     {
         await _sync.WaitAsync().ConfigureAwait(false);
@@ -303,7 +338,6 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
             command.CommandText = """
                 SELECT
                     COUNT(*) AS total_count,
-                    SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS waiting_count,
                     SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS sent_count,
                     SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS printed_count,
                     SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) AS error_count,
@@ -315,7 +349,7 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
             await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
             if (!await reader.ReadAsync().ConfigureAwait(false))
             {
-                return new SerialItemStatistics(0, 0, 0, 0, 0, 0, 0);
+                return new SerialItemStatistics(0, 0, 0, 0, 0, 0);
             }
 
             return new SerialItemStatistics(
@@ -324,8 +358,7 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
                 reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
                 reader.IsDBNull(3) ? 0 : reader.GetInt32(3),
                 reader.IsDBNull(4) ? 0 : reader.GetInt32(4),
-                reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
-                reader.IsDBNull(6) ? 0 : reader.GetInt32(6));
+                reader.IsDBNull(5) ? 0 : reader.GetInt32(5));
         }
         finally
         {
