@@ -36,6 +36,7 @@ public sealed class JsonAppStateService : IAppStateService
                 LastError = state.PrinterStatus?.LastError ?? string.Empty,
                 LastUpdatedAt = state.PrinterStatus?.LastUpdatedAt ?? DateTime.Now
             },
+            ImportFilePath = state.ImportFilePath ?? string.Empty,
             SavedAt = DateTime.Now
         };
 

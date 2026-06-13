@@ -155,6 +155,9 @@ public sealed class MainViewModel : ViewModelBase
 
         PrinterConfig = state?.PrinterConfig ?? new PrinterConfig();
         PrinterStatus = state?.PrinterStatus ?? new PrinterStatus();
+        ImportFilePath = state is not null && !string.IsNullOrWhiteSpace(state.ImportFilePath) && File.Exists(state.ImportFilePath)
+            ? state.ImportFilePath
+            : string.Empty;
         _appStatePrinterCounter = state?.PrinterStatus?.PrinterCounter ?? 0;
         PrinterStatus.IsConnected = false;
         PrinterStatus.IsPrinting = false;
@@ -285,6 +288,7 @@ public sealed class MainViewModel : ViewModelBase
             if (SetProperty(ref _importFilePath, value))
             {
                 ImportSerialFileCommand.NotifyCanExecuteChanged();
+                QueueStateSave();
             }
         }
     }
@@ -1724,6 +1728,7 @@ public sealed class MainViewModel : ViewModelBase
         var state = new AppState
         {
             PrinterConfig = PrinterConfig,
+            ImportFilePath = ImportFilePath,
             PrinterStatus = new PrinterStatus
             {
                 IsConnected = PrinterStatus.IsConnected,
