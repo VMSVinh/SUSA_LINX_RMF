@@ -16,6 +16,9 @@ namespace VMS_SUSA.ViewModels;
 public sealed class MainViewModel : ViewModelBase
 {
     private const int SerialPageSize = 500;
+    private const int RemoteFieldBufferTarget = 30;
+    private static readonly TimeSpan GridRefreshDelay = TimeSpan.FromMilliseconds(1000);
+    private static readonly TimeSpan StateSaveDelay = TimeSpan.FromSeconds(1);
 
     private readonly IPrinterService _printerService;
     private readonly IAppStateService _appStateService;
@@ -50,8 +53,14 @@ public sealed class MainViewModel : ViewModelBase
     private bool _isRefreshingStatus;
     private string _operationStatusText = "Sẵn sàng xử lý";
     private readonly SemaphoreSlim _remoteFieldSendLock = new(1, 1);
+    private readonly SemaphoreSlim _remoteFieldDataSendLock = new(1, 1);
     private readonly SemaphoreSlim _bulkSendLock = new(1, 1);
+    private readonly SemaphoreSlim _bufferTopUpLock = new(1, 1);
+    private readonly object _deferredWorkSync = new();
     private bool _resetPrinterCounterAfterImport;
+    private bool _isGridRefreshQueued;
+    private bool _isStateSaveQueued;
+    private bool _isStateSaveRequestedAgain;
 
     public MainViewModel(IPrinterService printerService, IAppStateService appStateService, IFileDialogService fileDialogService, IPrinterDataLogService printerDataLogService, ISerialItemRepository serialItemRepository)
     {
@@ -533,13 +542,7 @@ public sealed class MainViewModel : ViewModelBase
 
     private void PrinterService_PrintTriggerReceived(object? sender, PrinterTriggerReceivedEventArgs e)
     {
-        if (Application.Current?.Dispatcher is null)
-        {
-            _ = HandlePrinterTriggerAsync(e.RawData);
-            return;
-        }
-
-        _ = Application.Current.Dispatcher.InvokeAsync(() => HandlePrinterTriggerAsync(e.RawData));
+        _ = HandlePrinterTriggerAsync(e.RawData);
     }
 
     private void UpdateCurrentTime()
@@ -722,6 +725,127 @@ public sealed class MainViewModel : ViewModelBase
         UpdateCommandStates();
     }
 
+    private void UpdatePrintProgressState()
+    {
+        OnPropertyChanged(nameof(ValidCount));
+        OnPropertyChanged(nameof(WaitingCount));
+        OnPropertyChanged(nameof(SentCount));
+        OnPropertyChanged(nameof(PrintedCount));
+        OnPropertyChanged(nameof(RemainingCount));
+        OnPropertyChanged(nameof(CanSend30RemoteFieldsThenStartPrint));
+        OnPropertyChanged(nameof(PrintStatusText));
+        OnPropertyChanged(nameof(PrintStatusBrush));
+        OnPropertyChanged(nameof(WarningBrush));
+        RefreshWarningText();
+        Send30RemoteFieldsThenStartPrintCommand.NotifyCanExecuteChanged();
+    }
+
+    private async Task UpdatePrintProgressStateAsync()
+    {
+        await RunOnUiThreadAsync(UpdatePrintProgressState);
+    }
+
+    private Task RunOnUiThreadAsync(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        return dispatcher.InvokeAsync(action).Task;
+    }
+
+    private Task<T> RunOnUiThreadAsync<T>(Func<T> action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            return Task.FromResult(action());
+        }
+
+        return dispatcher.InvokeAsync(action).Task;
+    }
+
+    private Task RunOnUiThreadAsync(Func<Task> action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            return action();
+        }
+
+        return dispatcher.InvokeAsync(action).Task.Unwrap();
+    }
+
+    private void QueueGridRefresh()
+    {
+        if (_isGridRefreshQueued)
+        {
+            return;
+        }
+
+        _isGridRefreshQueued = true;
+        _ = RefreshGridAfterDelayAsync();
+    }
+
+    private async Task RefreshGridAfterDelayAsync()
+    {
+        try
+        {
+            await Task.Delay(GridRefreshDelay).ConfigureAwait(false);
+            await LoadCurrentPageFromRepositoryAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _isGridRefreshQueued = false;
+        }
+    }
+
+    private void QueueStateSave()
+    {
+        lock (_deferredWorkSync)
+        {
+            if (_isStateSaveQueued)
+            {
+                _isStateSaveRequestedAgain = true;
+                return;
+            }
+
+            _isStateSaveQueued = true;
+        }
+
+        _ = SaveStateAfterDelayAsync();
+    }
+
+    private async Task SaveStateAfterDelayAsync()
+    {
+        try
+        {
+            await Task.Delay(StateSaveDelay).ConfigureAwait(false);
+            await RunOnUiThreadAsync(SaveStateAsync);
+        }
+        finally
+        {
+            var saveAgain = false;
+            lock (_deferredWorkSync)
+            {
+                saveAgain = _isStateSaveRequestedAgain;
+                _isStateSaveRequestedAgain = false;
+                if (!saveAgain)
+                {
+                    _isStateSaveQueued = false;
+                }
+            }
+
+            if (saveAgain)
+            {
+                _ = SaveStateAfterDelayAsync();
+            }
+        }
+    }
+
     private void RefreshWarningText()
     {
         if (TotalImportedCount == 0)
@@ -832,13 +956,14 @@ public sealed class MainViewModel : ViewModelBase
 
         SetOperationStatus("Đang import dữ liệu...", true);
 
-        var serialLength = Math.Max(1, PrinterConfig.SerialLength);
-        var validSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var totalLines = 0;
         var importedCount = 0;
         var progress = new Progress<int>(count =>
         {
-            OperationStatusText = $"Đang import... {count:N0} serial";
+            if (count % 5000 == 0)
+            {
+                OperationStatusText = $"Đang import... {count:N0} serial";
+            }
         });
 
         try
@@ -859,35 +984,17 @@ public sealed class MainViewModel : ViewModelBase
                     var item = new SerialItem
                     {
                         Index = importedCount,
-                        Serial = serial
+                        Serial = serial,
+                        Status = SerialStatus.Waiting,
+                        Note = string.Empty
                     };
-
-                    if (serial.Length != serialLength)
-                    {
-                        item.Status = SerialStatus.Invalid;
-                        item.Note = "Sai độ dài";
-                    }
-                    else if (!validSet.Add(serial))
-                    {
-                        item.Status = SerialStatus.Duplicate;
-                        item.Note = "Serial trùng";
-                    }
-                    else
-                    {
-                        item.Status = SerialStatus.Waiting;
-                        item.Note = string.Empty;
-                    }
-
-                    if (importedCount % 1000 == 0)
-                    {
-                        OperationStatusText = $"Đang import... {importedCount:N0} serial";
-                    }
 
                     yield return item;
                 }
             }
 
             await _serialItemRepository.ReplaceAllAsync(EnumerateImportedItems(), progress);
+            await _serialItemRepository.RecalculateDuplicateStatusesAsync(Math.Max(1, PrinterConfig.SerialLength));
             var statistics = await _serialItemRepository.GetStatisticsAsync();
             SetStatisticsSnapshot(statistics);
             CurrentPage = 1;
@@ -1285,34 +1392,47 @@ public sealed class MainViewModel : ViewModelBase
         await _remoteFieldSendLock.WaitAsync();
         try
         {
-            PrinterStatus.LastReceivedRawData = rawData;
-            PrinterStatus.ReceivedRawDataLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {rawData}";
-            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            var triggerState = await RunOnUiThreadAsync(() =>
+            {
+                PrinterStatus.LastReceivedRawData = rawData;
+                PrinterStatus.ReceivedRawDataLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {rawData}";
+                PrinterStatus.LastUpdatedAt = DateTime.Now;
 
-            if (!IsConnected || !IsPrinting)
+                if (!IsConnected || !IsPrinting)
+                {
+                    return new TriggerState(false, false);
+                }
+
+                PrinterStatus.PrinterCounter += 1;
+                _appStatePrinterCounter = PrinterStatus.PrinterCounter;
+                return new TriggerState(true, ShouldStopPrintNow);
+            });
+
+            if (!triggerState.ShouldProcess)
             {
                 return;
             }
 
-            PrinterStatus.PrinterCounter += 1;
-            _appStatePrinterCounter = PrinterStatus.PrinterCounter;
-
-            await MarkMostRecentPrintedAsync();
-
-            if (ShouldStopPrintNow)
+            if (triggerState.ShouldStopPrint)
             {
                 await FinalizeRemainingSentItemsAsync();
-                await StopPrintAsync();
+                await RunOnUiThreadAsync(StopPrintAsync);
                 return;
             }
 
+            var printedItem = await _serialItemRepository.GetFirstByStatusAsync(SerialStatus.Sent);
             await SendNextRemoteFieldDataAsync("Nhận trigger 1B-0F", showNoDataMessage: false);
+            _ = TopUpRemoteFieldBufferAsync();
+            await MarkPrintedAsync(printedItem);
         }
         catch (Exception ex)
         {
-            PrinterStatus.LastError = $"Trigger handler error: {ex.Message}";
-            PrinterStatus.LastUpdatedAt = DateTime.Now;
-            UpdateDerivedState();
+            await RunOnUiThreadAsync(() =>
+            {
+                PrinterStatus.LastError = $"Trigger handler error: {ex.Message}";
+                PrinterStatus.LastUpdatedAt = DateTime.Now;
+                UpdateDerivedState();
+            });
         }
         finally
         {
@@ -1320,9 +1440,16 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    private readonly record struct TriggerState(bool ShouldProcess, bool ShouldStopPrint);
+
     private async Task MarkMostRecentPrintedAsync()
     {
         var item = await _serialItemRepository.GetFirstByStatusAsync(SerialStatus.Sent);
+        await MarkPrintedAsync(item);
+    }
+
+    private async Task MarkPrintedAsync(SerialItem? item)
+    {
         if (item is null)
         {
             return;
@@ -1332,22 +1459,30 @@ public sealed class MainViewModel : ViewModelBase
         item.Status = SerialStatus.Printed;
         item.PrintedAt = DateTime.Now;
         item.Note = string.Empty;
-        PrinterStatus.LastPrintedSerial = item.Serial;
-        PrinterStatus.LastUpdatedAt = DateTime.Now;
         await _serialItemRepository.UpdateAsync(item);
         AdjustStatisticsForStatusChange(previousStatus, item.Status);
-        await LoadCurrentPageFromRepositoryAsync();
-        UpdateDerivedState();
-        await SaveStateAsync();
+        await RunOnUiThreadAsync(() =>
+        {
+            PrinterStatus.LastPrintedSerial = item.Serial;
+            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            UpdatePrintProgressState();
+        });
+        QueueGridRefresh();
+        QueueStateSave();
     }
 
     private async Task SyncPrintedItemsToPrinterCounterAsync()
     {
-        var lastPrintedSerial = await _serialItemRepository.ReconcilePrintedItemsAsync(PrinterStatus.PrinterCounter);
-        PrinterStatus.LastPrintedSerial = lastPrintedSerial ?? string.Empty;
-        SetStatisticsSnapshot(await _serialItemRepository.GetStatisticsAsync());
-        await LoadCurrentPageFromRepositoryAsync();
-        UpdateDerivedState();
+        var printerCounter = await RunOnUiThreadAsync(() => PrinterStatus.PrinterCounter);
+        var lastPrintedSerial = await _serialItemRepository.ReconcilePrintedItemsAsync(printerCounter);
+        var statistics = await _serialItemRepository.GetStatisticsAsync();
+        await RunOnUiThreadAsync(() =>
+        {
+            SetStatisticsSnapshot(statistics);
+            PrinterStatus.LastPrintedSerial = lastPrintedSerial ?? string.Empty;
+            UpdatePrintProgressState();
+        });
+        QueueGridRefresh();
     }
 
     private async Task FinalizeRemainingSentItemsAsync()
@@ -1375,70 +1510,122 @@ public sealed class MainViewModel : ViewModelBase
         if (changed)
         {
             var lastPrinted = await _serialItemRepository.GetLastByStatusAsync(SerialStatus.Printed);
-            PrinterStatus.LastPrintedSerial = lastPrinted?.Serial ?? string.Empty;
-            PrinterStatus.LastUpdatedAt = now;
-            await LoadCurrentPageFromRepositoryAsync();
-            UpdateDerivedState();
-            await SaveStateAsync();
+            await RunOnUiThreadAsync(() =>
+            {
+                PrinterStatus.LastPrintedSerial = lastPrinted?.Serial ?? string.Empty;
+                PrinterStatus.LastUpdatedAt = now;
+                UpdatePrintProgressState();
+            });
+            QueueGridRefresh();
+            QueueStateSave();
         }
     }
 
-    private async Task SendNextRemoteFieldDataAsync(string actionTitle, bool showNoDataMessage)
+    private async Task<bool> SendNextRemoteFieldDataAsync(string actionTitle, bool showNoDataMessage)
     {
-        if (!IsConnected)
+        await _remoteFieldDataSendLock.WaitAsync();
+        try
         {
-            if (showNoDataMessage)
+            var isConnected = await RunOnUiThreadAsync(() => IsConnected);
+            if (!isConnected)
             {
-                MessageBox.Show("Chưa kết nối máy in.", actionTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (showNoDataMessage)
+                {
+                    await RunOnUiThreadAsync(() =>
+                        MessageBox.Show("Chưa kết nối máy in.", actionTitle, MessageBoxButton.OK, MessageBoxImage.Warning));
+                }
+
+                return false;
             }
 
-            return;
-        }
-
-        var nextItem = await _serialItemRepository.GetFirstByStatusAsync(SerialStatus.Waiting);
-        if (nextItem is null)
-        {
-            if (showNoDataMessage)
+            var nextItem = await _serialItemRepository.GetFirstByStatusAsync(SerialStatus.Waiting);
+            if (nextItem is null)
             {
-                MessageBox.Show("Đã hết dữ liệu in.", actionTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (showNoDataMessage)
+                {
+                    await RunOnUiThreadAsync(() =>
+                        MessageBox.Show("Đã hết dữ liệu in.", actionTitle, MessageBoxButton.OK, MessageBoxImage.Warning));
+                }
+
+                await SyncPrintedItemsToPrinterCounterAsync();
+
+                return false;
             }
 
-            await SyncPrintedItemsToPrinterCounterAsync();
+            var ok = await _printerService.Send1RemoteFieldDataAsync(nextItem.Serial);
+            if (ok)
+            {
+                var previousStatus = nextItem.Status;
+                nextItem.Status = SerialStatus.Sent;
+                nextItem.SentAt = DateTime.Now;
+                nextItem.Note = string.Empty;
+                await _serialItemRepository.UpdateAsync(nextItem);
+                AdjustStatisticsForStatusChange(previousStatus, nextItem.Status);
+                await RunOnUiThreadAsync(() =>
+                {
+                    PrinterStatus.SoftwareCounter += 1;
+                    PrinterStatus.LastSentSerial = nextItem.Serial;
+                    PrinterStatus.LastError = string.Empty;
+                    PrinterStatus.LastUpdatedAt = DateTime.Now;
+                    UpdatePrintProgressState();
+                });
+                QueueGridRefresh();
+                QueueStateSave();
 
-            return;
-        }
+                return true;
+            }
 
-        var ok = await _printerService.Send1RemoteFieldDataAsync(nextItem.Serial);
-        if (ok)
-        {
-            var previousStatus = nextItem.Status;
-            nextItem.Status = SerialStatus.Sent;
-            nextItem.SentAt = DateTime.Now;
-            nextItem.Note = string.Empty;
-
-            PrinterStatus.SoftwareCounter += 1;
-            PrinterStatus.LastSentSerial = nextItem.Serial;
-            PrinterStatus.LastError = string.Empty;
-            PrinterStatus.LastUpdatedAt = DateTime.Now;
+            var failedPreviousStatus = nextItem.Status;
+            nextItem.Status = SerialStatus.Error;
+            nextItem.Note = showNoDataMessage ? "Gửi Remote Field Data thất bại" : "Tự động gửi Remote Field Data thất bại";
             await _serialItemRepository.UpdateAsync(nextItem);
-            AdjustStatisticsForStatusChange(previousStatus, nextItem.Status);
-            await LoadCurrentPageFromRepositoryAsync();
-            UpdateDerivedState();
-            await SaveStateAsync();
+            AdjustStatisticsForStatusChange(failedPreviousStatus, nextItem.Status);
+            await RunOnUiThreadAsync(() =>
+            {
+                PrinterStatus.LastError = _printerService.LastError;
+                PrinterStatus.LastUpdatedAt = DateTime.Now;
+                UpdatePrintProgressState();
+            });
+            QueueGridRefresh();
+            QueueStateSave();
+            return false;
+        }
+        finally
+        {
+            _remoteFieldDataSendLock.Release();
+        }
+    }
 
+    private async Task TopUpRemoteFieldBufferAsync()
+    {
+        if (!await _bufferTopUpLock.WaitAsync(0).ConfigureAwait(false))
+        {
             return;
         }
 
-        var failedPreviousStatus = nextItem.Status;
-        nextItem.Status = SerialStatus.Error;
-        nextItem.Note = showNoDataMessage ? "Gửi Remote Field Data thất bại" : "Tự động gửi Remote Field Data thất bại";
-        PrinterStatus.LastError = _printerService.LastError;
-        PrinterStatus.LastUpdatedAt = DateTime.Now;
-        await _serialItemRepository.UpdateAsync(nextItem);
-        AdjustStatisticsForStatusChange(failedPreviousStatus, nextItem.Status);
-        await LoadCurrentPageFromRepositoryAsync();
-        UpdateDerivedState();
-        await SaveStateAsync();
+        try
+        {
+            while (true)
+            {
+                var bufferAhead = await RunOnUiThreadAsync(() =>
+                    PrinterStatus.SoftwareCounter - PrinterStatus.PrinterCounter);
+
+                if (bufferAhead >= RemoteFieldBufferTarget)
+                {
+                    return;
+                }
+
+                var sent = await SendNextRemoteFieldDataAsync("Bù data đệm", showNoDataMessage: false);
+                if (!sent)
+                {
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            _bufferTopUpLock.Release();
+        }
     }
 
     private async Task GetPrinterStatusAsync()

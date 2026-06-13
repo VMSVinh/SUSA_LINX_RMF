@@ -10,6 +10,7 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
     private const int SchemaVersion = 1;
     private const string DatabaseFileName = "printer_data.db";
     private const int InsertBatchSize = 100;
+    private const int ProgressReportStep = 5000;
 
     private readonly SemaphoreSlim _sync = new(1, 1);
 
@@ -106,6 +107,13 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
                 await deleteCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
 
+            await using (var resetSequenceCommand = connection.CreateCommand())
+            {
+                resetSequenceCommand.Transaction = transaction;
+                resetSequenceCommand.CommandText = "DELETE FROM sqlite_sequence WHERE name = 'serial_items';";
+                await resetSequenceCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+
             var batch = new List<SerialItem>(InsertBatchSize);
             var insertedCount = 0;
             foreach (var item in items)
@@ -115,7 +123,10 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
                 {
                     insertedCount += batch.Count;
                     await InsertBatchAsync(connection, transaction, batch).ConfigureAwait(false);
-                    progress?.Report(insertedCount);
+                    if (progress is not null && insertedCount % ProgressReportStep == 0)
+                    {
+                        progress.Report(insertedCount);
+                    }
                     batch.Clear();
                 }
             }
@@ -124,8 +135,9 @@ public sealed class SqliteSerialItemRepository : ISerialItemRepository
             {
                 insertedCount += batch.Count;
                 await InsertBatchAsync(connection, transaction, batch).ConfigureAwait(false);
-                progress?.Report(insertedCount);
             }
+
+            progress?.Report(insertedCount);
 
             await transaction.CommitAsync().ConfigureAwait(false);
         }
