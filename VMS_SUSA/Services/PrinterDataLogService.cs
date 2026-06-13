@@ -10,11 +10,15 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
 {
     private const int MaxRawLogLines = 1000;
     private const int RawLogTrimInterval = 200;
+    private const int RawLogFlushDelayMs = 250;
 
     private readonly SemaphoreSlim _serialSync = new(1, 1);
     private readonly SemaphoreSlim _rawLogSync = new(1, 1);
     private readonly ISerialItemRepository _serialItemRepository;
+    private readonly object _rawLogBufferSync = new();
+    private readonly List<string> _rawLogBuffer = new();
     private int _rawLogAppendCount;
+    private int _rawLogFlushRunning;
 
     public PrinterDataLogService(ISerialItemRepository serialItemRepository)
     {
@@ -62,32 +66,94 @@ public sealed class PrinterDataLogService : IPrinterDataLogService
         }
     }
 
-    public async Task AppendRawAsync(string rawData)
+    public Task AppendRawAsync(string rawData)
     {
         if (string.IsNullOrWhiteSpace(rawData))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} | {rawData}";
 
+        lock (_rawLogBufferSync)
+        {
+            _rawLogBuffer.Add(line);
+        }
+
+        if (Interlocked.CompareExchange(ref _rawLogFlushRunning, 1, 0) == 0)
+        {
+            _ = FlushRawLogBufferAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task FlushRawLogBufferAsync()
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(RawLogFlushDelayMs).ConfigureAwait(false);
+
+                List<string> batch;
+                lock (_rawLogBufferSync)
+                {
+                    if (_rawLogBuffer.Count == 0)
+                    {
+                        _rawLogFlushRunning = 0;
+                        return;
+                    }
+
+                    batch = new List<string>(_rawLogBuffer);
+                    _rawLogBuffer.Clear();
+                }
+
+                await AppendRawBatchAsync(batch).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            if (Interlocked.Exchange(ref _rawLogFlushRunning, 0) == 1)
+            {
+                lock (_rawLogBufferSync)
+                {
+                    if (_rawLogBuffer.Count > 0 && Interlocked.CompareExchange(ref _rawLogFlushRunning, 1, 0) == 0)
+                    {
+                        _ = FlushRawLogBufferAsync();
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task AppendRawBatchAsync(IReadOnlyCollection<string> batch)
+    {
+        if (batch.Count == 0)
+        {
+            return;
+        }
+
         await _rawLogSync.WaitAsync().ConfigureAwait(false);
         try
         {
-            await using (var stream = new FileStream(
-                             RawPrinterLogFilePath,
-                             FileMode.Append,
-                             FileAccess.Write,
-                             FileShare.ReadWrite,
-                             4096,
-                             FileOptions.Asynchronous))
+            await using var stream = new FileStream(
+                RawPrinterLogFilePath,
+                FileMode.Append,
+                FileAccess.Write,
+                FileShare.ReadWrite,
+                4096,
+                FileOptions.Asynchronous);
+
+            await using var writer = new StreamWriter(stream, Encoding.UTF8);
+            foreach (var line in batch)
             {
-                await using var writer = new StreamWriter(stream, Encoding.UTF8);
                 await writer.WriteLineAsync(line).ConfigureAwait(false);
-                await writer.FlushAsync().ConfigureAwait(false);
             }
 
-            _rawLogAppendCount++;
+            await writer.FlushAsync().ConfigureAwait(false);
+
+            _rawLogAppendCount += batch.Count;
             if (_rawLogAppendCount >= RawLogTrimInterval)
             {
                 _rawLogAppendCount = 0;

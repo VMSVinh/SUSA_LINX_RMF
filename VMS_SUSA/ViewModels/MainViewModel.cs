@@ -1656,10 +1656,7 @@ public sealed class MainViewModel : ViewModelBase
             var previousSoftwareCounter = PrinterStatus.SoftwareCounter;
             var previousLastSentSerial = PrinterStatus.LastSentSerial;
             var previousLastPrintedSerial = PrinterStatus.LastPrintedSerial;
-            var previousLastReceivedRawData = PrinterStatus.LastReceivedRawData;
-            var previousReceivedRawDataLog = PrinterStatus.ReceivedRawDataLog;
             var previousLastError = PrinterStatus.LastError;
-            var previousLastUpdatedAt = PrinterStatus.LastUpdatedAt;
 
             PrinterStatus.IsConnected = status.IsConnected;
             PrinterStatus.IsPrinting = status.IsPrinting;
@@ -1681,10 +1678,7 @@ public sealed class MainViewModel : ViewModelBase
                 previousSoftwareCounter != status.SoftwareCounter ||
                 !string.Equals(previousLastSentSerial, status.LastSentSerial, StringComparison.Ordinal) ||
                 !string.Equals(previousLastPrintedSerial, status.LastPrintedSerial, StringComparison.Ordinal) ||
-                !string.Equals(previousLastReceivedRawData, status.LastReceivedRawData, StringComparison.Ordinal) ||
-                !string.Equals(previousReceivedRawDataLog, status.ReceivedRawDataLog, StringComparison.Ordinal) ||
-                !string.Equals(previousLastError, status.LastError, StringComparison.Ordinal) ||
-                previousLastUpdatedAt != status.LastUpdatedAt;
+                !string.Equals(previousLastError, status.LastError, StringComparison.Ordinal);
 
             if (status.PrinterCounter != previousCounter)
             {
@@ -1700,7 +1694,7 @@ public sealed class MainViewModel : ViewModelBase
 
             if (statusChanged)
             {
-                await SaveStateAsync();
+                QueueStateSave();
             }
         }
         finally
