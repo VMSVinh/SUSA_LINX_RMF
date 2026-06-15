@@ -352,7 +352,7 @@ public sealed class MainViewModel : ViewModelBase
 
     public int ErrorCount => _serialStatistics.ErrorCount;
 
-    public int RemainingCount => _serialStatistics.TotalCount - SentCount - PrintedCount - ErrorCount - DuplicateCount - InvalidCount;
+    public int RemainingCount => Math.Max(0, ValidCount - PrintedCount);
 
     public int DisplayedCount
     {
@@ -869,7 +869,13 @@ public sealed class MainViewModel : ViewModelBase
 
         if (RemainingCount == 0)
         {
-            SystemWarningText = "Đã hết dữ liệu in";
+            SystemWarningText = "Đã in hết dữ liệu";
+            return;
+        }
+
+        if (IsPrinting && SentCount == 0)
+        {
+            SystemWarningText = "Đã gửi hết dữ liệu, đang chờ máy in hoàn tất";
             return;
         }
 
@@ -1652,6 +1658,7 @@ public sealed class MainViewModel : ViewModelBase
                 }
 
                 await FinalizeRemainingSentItemsAsync();
+                await SyncPrintedItemsToPrinterCounterAsync();
                 await RunOnUiThreadAsync(StopPrintAsync);
                 return;
             }
