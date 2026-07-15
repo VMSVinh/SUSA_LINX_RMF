@@ -354,6 +354,8 @@ public sealed class MainViewModel : ViewModelBase
 
     public int RemainingCount => Math.Max(0, ValidCount - PrintedCount);
 
+    public int QueuedCount => Math.Max(0, ValidCount - SentCount - PrintedCount);
+
     public int DisplayedCount
     {
         get => _displayedCount;
@@ -873,9 +875,11 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        if (IsPrinting && SentCount == 0)
+        if (QueuedCount == 0)
         {
-            SystemWarningText = "Đã gửi hết dữ liệu, đang chờ máy in hoàn tất";
+            SystemWarningText = IsPrinting
+                ? "Đã gửi hết dữ liệu, đang chờ máy in hoàn tất"
+                : "Đã gửi hết dữ liệu";
             return;
         }
 
